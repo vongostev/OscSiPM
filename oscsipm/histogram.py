@@ -2,7 +2,7 @@
 """
 @author: Pavel Gostev
 """
-from ..detection_core import normalize, lrange, abssum
+from ._numpy_core import normalize, lrange, abssum
 
 import numpy as np
 from scipy.signal import find_peaks
@@ -28,7 +28,11 @@ def peak_area(norm_factor, peak_pos, sigma, h3, h4):
     return norm_factor * sigma * (np.sqrt(2*np.pi) + h4)
 
 def minpoly(popt, bins, hist):
-    return abssum(np.vectorize(gauss_hermite_poly)(bins, *popt) - hist)
+    return abssum(gauss_hermite_poly(bins, *popt) - hist)
+
+
+def mindowns(popt, bins, hist, downs):
+    return abssum((hist - gauss_hermite_poly(bins, *popt))[downs])
 
 
 def hist2Q(hist, bins, discrete, threshold=1, peak_width=1, plot=False, method='sum'):
@@ -71,15 +75,32 @@ def hist2Q(hist, bins, discrete, threshold=1, peak_width=1, plot=False, method='
     JOSA B 27.5 (2010): 852-862.
 
     """
-    peaks, _ = find_peaks(hist, threshold=threshold, distance=discrete,
-                          width=peak_width)
-    downs, _ = find_peaks(-hist, distance=discrete, width=2)
-    downs = np.append([0], downs)
+    downs, _ = find_peaks(-hist, distance=discrete, width=1)
     if plot:
         plt.plot(bins, hist)
+        
+    dsum = 0
+    while sum(hist[downs]) > 0.01:
+
+        dres = minimize(mindowns, args=(bins, hist, downs),
+                        x0=(1, bins[len(bins) // 2], np.sqrt(bins[len(bins) // 2]), 0, 0))
+        hist -= gauss_hermite_poly(bins, *dres.x)
+        hist[hist < 0] = 0
+        if dsum <= sum(hist[downs]):
+            break
+        dsum = sum(hist[downs])
+        
+    if plot:
+        plt.plot(bins, hist)
+
+    peaks, _ = find_peaks(hist, threshold=threshold, distance=discrete,
+                          width=peak_width)
+    downs, _ = find_peaks(-hist, distance=discrete, width=1)
+    downs = np.sort(np.append([downs[0] - int(discrete * 1.2), len(bins) - 1], downs))
+    if plot:
         plt.scatter(bins[peaks], hist[peaks])
         plt.scatter(bins[downs], hist[downs])
-        plt.show()
+    plt.show()
 
     Q = []
     for i in lrange(downs)[:-1]:
@@ -93,13 +114,13 @@ def hist2Q(hist, bins, discrete, threshold=1, peak_width=1, plot=False, method='
                     res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]), tol=1e-16,
                                    x0=(1, bins[p], bins[1] - bins[0], 0.01, 0.01),
                                    bounds=list(zip([1, bins[dl], bins[1] - bins[0], -0.01, -0.01], 
-                                                   [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]), 0.01, 0.01])))
+                                                   [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 4, 0.01, 0.01])))
                     popt = res.x
                     Q.append(peak_area(*popt))
                     if plot:
                         plt.plot(bins, gauss_hermite_poly(bins, *popt))
     if plot and method == 'fit': 
-        plt.plot(bins, hist)
+        #plt.plot(bins, hist)
         plt.show()
     return normalize(Q)
 
@@ -134,7 +155,7 @@ class QStatisticsMaker:
         self.plot = plot
 
         self._extract_data(skiprows)
-        self.Q = hist2Q(self.hist, self.bins, discrete=self.points_discrete // 2,
+        self.Q = hist2Q(self.hist, self.bins, discrete=self.points_discrete // 1.2,
                         peak_width=peak_width, plot=self.plot, method=method)
 
     # Reading information from the file

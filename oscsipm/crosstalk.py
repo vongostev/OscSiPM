@@ -7,14 +7,17 @@ Created on Tue Aug 27 20:51:49 2019
 import numpy as np
 
 from scipy.optimize import brute, OptimizeResult
-from .. import (g2, mean, normalize, P2Q, moment)
-from ..stat import ppoisson
+from ._dcore import (g2, mean, normalize, P2Q, moment, fact)
 import logging
 
 
 log = logging.getLogger('sc_crosstalk')
 log.setLevel(logging.INFO)
 info = log.info
+
+
+def ppoisson(pmean, N):
+    return np.array([pmean ** n * np.exp(-pmean) / fact(n) for n in range(N)])
 
 
 def d_crosstalk_4n(p_crosstalk):
@@ -132,7 +135,6 @@ def distort(Qcorr, p_crosstalk):
         return sum(Qcorr[m] * p_crosstalk_m(m, k, p_crosstalk) for m in range(1, k + 1, 1))
     Q[1:] = [genf(k) for k in range(1, N, 1)]
     return Q
-
 
 def compensate(Q, p_crosstalk):
     """
