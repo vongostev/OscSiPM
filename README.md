@@ -10,7 +10,7 @@ from oscsipm import PulsesHistMaker, QStatisticsMaker, optimize_pcrosstalk, comp
 Import an experimental data
 ```python
 datadir = "C:\\expdata\\"
-parser = PulsesHistMaker(datadir, method='max', parallel=True, parallel_jobs=2)
+parser = PulsesHistMaker(datadir, vendor='tek', parallel=True, parallel_jobs=2)
 parser.read()
 ```
 Make a histogram
