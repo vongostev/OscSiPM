@@ -16,8 +16,10 @@ try:
     DPREC = np.float128
 except:
     DPREC = np.float64
-    np.warnings.warn_explicit("Numpy.float128 can not be used. DPREC is numpy.float64, results may be unprecise.",
-                              RuntimeWarning, __file__, 18)
+    np.warnings.warn_explicit(
+        "Numpy.float128 can not be used. DPREC is numpy.float64, results may be unprecise.",
+        RuntimeWarning, __file__, 18)
+
 
 def compose(*functions):
     def pack(x): return x if type(x) is tuple else (x,)

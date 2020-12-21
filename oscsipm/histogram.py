@@ -140,16 +140,27 @@ class QStatisticsMaker:
         It must be 1 if the histogram is made by 'count' method.
         It must be greater if the histogram is made by oscilloscope or 'max' method.
         The default is 1.
+    method: {'sum', 'fit'}
+        Method of the photocounting statistics construction.
+            'sum' is a simple summation between minimums of the histogram
+            
+            'fit' is a gauss-hermite function fitteing like in [1]
     skiprows : int, optional
         Number of preamble rows in the file. The default is 0.
     plot : bool, optional
         Flag to plot hist and results of find_peaks.
         The default is False.
+        
+    References
+    ----------
+    .. [1]
+    Ramilli, Marco, et al. "Photon-number statistics with silicon photomultipliers."
+    JOSA B 27.5 (2010): 852-862.
 
     """
 
     def __init__(self, fname, photon_discrete,
-                 peak_width=1, method='sum', skiprows=0, plot=False):
+                 peak_width=1, method='fit', skiprows=0, plot=False):
         self.photon_discrete = photon_discrete
         self.fname = fname
         self.plot = plot
