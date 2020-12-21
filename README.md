@@ -4,12 +4,12 @@ Instruments to make photocounting statistics from histograms and raw oscillogram
 # How to use?
 Import necessary modules:
 ```python
-from qpip.sipm import PulsesHistMaker, QStatisticsMaker, optimize_pcrosstalk, compensate
+from oscsipm import PulsesHistMaker, QStatisticsMaker, optimize_pcrosstalk, compensate
 ```
 Import an experimental data
 ```python
 datadir = "C:\\expdata\\"
-parser = PulsesHistMaker(datadir, method='max', discrete=0.021, parallel=True, parallel_jobs=2)
+parser = PulsesHistMaker(datadir, method='max', parallel=True, parallel_jobs=2)
 parser.read()
 ```
 Make a histogram
