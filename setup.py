@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="oscsipm-vong",
+    name="oscsipm",
     version="0.1",
     author="Pavel Gostev",
     author_email="gostev.pavel@physics.msu.ru",
