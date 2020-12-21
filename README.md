@@ -2,6 +2,11 @@
 # OscSiPM
 Instruments to make photocounting statistics from histograms and raw oscillograms (made by LeCroy oscilloscope or old Tektronix oscilloscope) of SiPM signal. One can correct the baseline of the oscillogram and compensate a crosstalk noise of photocounting statistics.
 
+# Installation
+OscSiPM is available at pip. It may be installed with
+```bash
+pip install oscsipm
+```
 # How to use?
 Import necessary modules:
 ```python
