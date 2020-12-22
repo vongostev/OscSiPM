@@ -1,3 +1,4 @@
+from oscsipm.__init__ import __version__
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -5,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="oscsipm",
-    version="0.1",
+    version=__version__,
     author="Pavel Gostev",
     author_email="gostev.pavel@physics.msu.ru",
     description="Instruments to make photocounting statistics from histograms and raw oscillograms",

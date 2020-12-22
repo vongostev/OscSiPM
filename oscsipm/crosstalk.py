@@ -7,7 +7,7 @@ Created on Tue Aug 27 20:51:49 2019
 import numpy as np
 
 from scipy.optimize import brute, OptimizeResult
-from ._dcore import (g2, mean, normalize, P2Q, moment, fact)
+from . import (g2, mean, normalize, P2Q, moment, fact)
 import logging
 
 
