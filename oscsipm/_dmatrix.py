@@ -9,7 +9,7 @@ from scipy.special import binom
 from scipy.linalg import pinv
 from functools import lru_cache
 
-from ._numpy_core import *
+from ._numpy_core import DPREC
 
 
 def binomial_t_elem(qe: float, n: int, m: int):
@@ -41,14 +41,14 @@ def subbinom_t_elem(qe: float, n_cells: int, n: int, m: int):
     """
     Calculated from formula (5) via recursive approach from Appendix A
 
-    Sperling, J., Vogel, W., & Agarwal, G. S. (2014). 
-    Quantum state engineering by click counting. 
+    Sperling, J., Vogel, W., & Agarwal, G. S. (2014).
+    Quantum state engineering by click counting.
     Physical Review A, 89(4), 043829.
     for arbitrary quantum efficiency and zero noise
 
     Idea from
-    Sperling, J., Vogel, W., & Agarwal, G. S. (2012). 
-    True photocounting statistics of multiple on-off detectors. 
+    Sperling, J., Vogel, W., & Agarwal, G. S. (2012).
+    True photocounting statistics of multiple on-off detectors.
     Physical Review A, 85(2), 023820.
 
     """

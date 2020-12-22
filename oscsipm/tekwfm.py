@@ -10,8 +10,6 @@
 # https://forum.tek.com/viewtopic.php?t=141081
 
 import struct
-import time
-import sys
 import numpy as np
 
 

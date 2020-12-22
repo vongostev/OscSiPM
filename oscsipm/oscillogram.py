@@ -6,7 +6,6 @@ Created on Thu Jul  4 16:25:54 2019
 """
 import gc
 from dataclasses import dataclass
-from scipy.signal import find_peaks
 
 import lecroyparser
 from . import tekwfm as tek
@@ -138,6 +137,7 @@ def memo_oscillogram(data, vendor, correct_bs=True):
     if type(data) == tuple:
         if type(data[1]) is not str:
             return data
+
         filedata = (data[0], parse_file(data[0], vendor))
         filedata[1].y = data[1]
         return filedata
@@ -216,15 +216,16 @@ class PulsesHistMaker:
             with open(self.memo_file, 'rb') as f:
                 memodata = load(f, compression='lzma',
                                 set_default_extension=False)
-            for r in self.rawdata:
-                if r in memodata:
-                    r = (r, memodata[r])
+            for k, path in enumerate(self.rawdata):
+                if path in self.rawdata:
+                    self.rawdata[k] = (path, memodata[path])
+
         self.filesnum = len(self.rawdata)
 
     def save_memo(self, filename):
         self.clear_rawdata()
         with open(filename, 'wb') as f:
-            dump(self.rawdata, f, compression='lzma',
+            dump(dict(self.rawdata), f, compression='lzma',
                  set_default_extension=False)
 
     def save_hist(self, filename):

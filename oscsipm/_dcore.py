@@ -4,22 +4,19 @@ Created on Fri Oct 02 08:39:31 2019
 
 @author: Pavel Gostev
 @email: gostev.pavel@physics.msu.ru
-    
+
 Версия алгоритма расчета статистики фотоотсчетов
 на основе numpy.float128
 """
 
 import numpy as np
 
-from scipy.special import binom
-from scipy.linalg import solve
-
-from ._numpy_core import *
+from ._numpy_core import normalize
 from ._dmatrix import binomial_t_matrix, subbinomial_t_matrix
 from ._dmatrix import binomial_invt_matrix, subbinomial_invt_matrix
 
 
-def t_matrix(qe:float, N:int, M:int, mtype='binomial', n_cells=0):
+def t_matrix(qe: float, N: int, M: int, mtype='binomial', n_cells=0):
     """
     Method for construction of binomial or subbinomial photodetection matrix
     with size NxM
@@ -51,7 +48,7 @@ def t_matrix(qe:float, N:int, M:int, mtype='binomial', n_cells=0):
         Binomial or subbinomial photodetection matrix of size NxM.
 
     """
-    
+
     if mtype == 'binomial':
         return binomial_t_matrix(qe, N, M)
     elif mtype == 'subbinomial':
@@ -65,7 +62,8 @@ def t_matrix(qe:float, N:int, M:int, mtype='binomial', n_cells=0):
 
 def invt_matrix(qe, N, M, mtype='binomial', n_cells=0):
     """
-    Method for construction of binomial or subbinomial inverse photodetection matrix
+    Method for construction of binomial or
+    subbinomial inverse photodetection matrix
     with size MxN
 
     Parameters
@@ -133,7 +131,7 @@ def P2Q(P: np.ndarray, qe: float, M=0, mtype='binomial', n_cells=0):
         Photocounting statistics.
 
     """
-    
+
     N = len(P)
     if M == 0:
         M = N

@@ -18,7 +18,6 @@ if (log.hasHandlers()):
 info = log.info
 
 
-#@np.vectorize
 def gauss_hermite_poly(x, norm_factor, peak_pos, sigma, h3, h4):
     w = (x - peak_pos) / sigma
     return norm_factor * np.exp(- w ** 2 / 2)  * (1 + h3*eval_hermitenorm(3, w) + h4*eval_hermitenorm(4, w))
@@ -26,6 +25,7 @@ def gauss_hermite_poly(x, norm_factor, peak_pos, sigma, h3, h4):
 
 def peak_area(norm_factor, peak_pos, sigma, h3, h4):
     return norm_factor * sigma * (np.sqrt(2*np.pi) + h4)
+
 
 def minpoly(popt, bins, hist):
     return abssum(gauss_hermite_poly(bins, *popt) - hist)
@@ -35,7 +35,9 @@ def mindowns(popt, bins, hist, downs):
     return abssum((hist - gauss_hermite_poly(bins, *popt))[downs])
 
 
-def hist2Q(hist, bins, discrete, threshold=1, peak_width=1, plot=False, method='sum'):
+def hist2Q(hist, bins, discrete, 
+           threshold=1, peak_width=1, 
+           plot=False, method='sum'):
     """
     Build photocounting statistics from an experimental histogram
     by gaussian-hermite polynoms or simple sum
@@ -60,14 +62,14 @@ def hist2Q(hist, bins, discrete, threshold=1, peak_width=1, plot=False, method='
     method: {'sum', 'fit'}
         Method of the photocounting statistics construction.
             'sum' is a simple summation between minimums of the histogram
-            
+
             'fit' is a gauss-hermite function fitteing like in [1]
 
     Returns
     -------
     Q : ndarray
         The photocounting statistics.
-        
+
     References
     ----------
     .. [1]
