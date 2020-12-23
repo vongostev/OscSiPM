@@ -1,4 +1,5 @@
-![OscSiPM](https://github.com/vongostev/OscSiPM/workflows/OscSiPM/badge.svg?branch=main)
+![OscSiPM](https://github.com/vongostev/OscSiPM/workflows/OscSiPM/badge.svg?branch=main) [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/vongostev/OscSiPM.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/vongostev/OscSiPM/context:python)
+
 # OscSiPM
 Instruments to make photocounting statistics from histograms and raw oscillograms (made by LeCroy oscilloscope or old Tektronix oscilloscope) of SiPM signal. One can correct the baseline of the oscillogram and compensate a crosstalk noise of photocounting statistics.
 
