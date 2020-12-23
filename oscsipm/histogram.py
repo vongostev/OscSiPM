@@ -18,6 +18,17 @@ if (log.hasHandlers()):
 info = log.info
 
 
+def loadhist(path, **kwargs):
+    for dl in [',', ' ', '\t']:
+        try:
+            bins, hist = np.loadtxt(path, delimiter=dl, unpack=True, **kwargs)
+        except BaseException:
+            continue
+        finally:
+            return bins, hist
+    raise ValueError("Can't parse the histogram from the file %s" % path)
+
+
 def gauss_hermite_poly(x, norm_factor, peak_pos, sigma, h3, h4):
     w = (x - peak_pos) / sigma
     return norm_factor * np.exp(- w ** 2 / 2)  * (1 + h3*eval_hermitenorm(3, w) + h4*eval_hermitenorm(4, w))
@@ -173,11 +184,7 @@ class QStatisticsMaker:
 
     # Reading information from the file
     def _extract_data(self, skiprows):
-        try:
-            self.bins, self.hist = np.loadtxt(self.fname, skiprows=skiprows).T
-        except:
-            self.bins, self.hist = np.loadtxt(self.fname, skiprows=skiprows, 
-                                              delimiter=',').T
+        self.bins, self.hist = loadhist(self.fname, skiprows=skiprows)
         if self.bins[1] - self.bins[0] < 0:
             self.bins = self.bins[::-1]
             self.hist = self.hist[::-1]
