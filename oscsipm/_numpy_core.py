@@ -10,7 +10,7 @@ numpy version
 
 import functools
 import numpy as np
-from scipy.special import factorial, binom
+from scipy.special import factorial
 
 __all__ = ['compose', 'lrange', 'fact', 'p_convolve', 'moment', 'mean', 'g2', 
            'normalize', 'abssum', 'fidelity', 'entropy']

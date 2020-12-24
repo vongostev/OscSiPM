@@ -186,7 +186,7 @@ class PulsesHistMaker:
     vendor: str = 'lecroy'
         Vendor name. Can be 'tek' or 'lecroy'
     """
-    
+
     datadir: str
     fsnum: int = -1
     fsoffset: int = 0

@@ -9,20 +9,13 @@ from scipy.signal import find_peaks
 from scipy.special import eval_hermitenorm
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
-import logging
-
-log = logging.getLogger('hist')
-log.setLevel(logging.INFO)
-if (log.hasHandlers()):
-    log.handlers.clear()
-info = log.info
 
 
 def loadhist(path, **kwargs):
     for dl in [',', ' ', '\t']:
         try:
             bins, hist = np.loadtxt(path, delimiter=dl, unpack=True, **kwargs)
-        except BaseException:
+        except (ValueError, TypeError):
             continue
         finally:
             return bins, hist
