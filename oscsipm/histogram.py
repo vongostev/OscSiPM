@@ -40,13 +40,15 @@ def minpoly(popt, bins, hist):
 
 
 def mindowns(popt, bins, hist, downs):
-    return abssum((hist - gauss_hermite_poly(bins, *popt))[downs])
+    return np.linalg.norm((hist - gauss_hermite_poly(bins, *popt))[downs])
 
 
 def hist2Q(hist, bins, discrete,
            threshold=1, peak_width=1,
            plot=False, method='sum',
-           lim_downssum=0.01):
+           remove_pedestal=1,
+           lim_downssum=1,
+           maxiter=20):
     """
     Build photocounting statistics from an experimental histogram
     by gaussian-hermite polynoms or simple sum
@@ -68,12 +70,18 @@ def hist2Q(hist, bins, discrete,
     plot : bool, optional
         Flag to plot hist and results of find_peaks.
         The default is False.
-    method: {'sum', 'fit'}
+    method : {'sum', 'fit'}
         Method of the photocounting statistics construction.
             'sum' is a simple summation between minimums of the histogram
 
             'fit' is a gauss-hermite function fitteing like in [1]
-
+    remove_pedestal : boolean
+        Flag to remove pedestal noise from the histogram
+    lim_downssum : float
+        Limit for sum of downs of the histogram
+    maxiter : int
+        Maximum iterations count for pedestal removing
+        
     Returns
     -------
     Q : ndarray
@@ -89,25 +97,27 @@ def hist2Q(hist, bins, discrete,
     downs, _ = find_peaks(-hist, distance=discrete, width=1)
     if plot:
         plt.plot(bins, hist)
-
-    dsum = 0
-    while sum(hist[downs]) > lim_downssum:
-        dres = minimize(mindowns, args=(bins, hist, downs),
-                        x0=(1, bins[len(bins) // 2], np.sqrt(bins[len(bins) // 2]), 0, 0))
-        hist -= gauss_hermite_poly(bins, *dres.x)
-        hist[hist < 0] = 0
-        if dsum <= sum(hist[downs]):
-            break
-        dsum = sum(hist[downs])
-
-    if plot:
-        plt.plot(bins, hist)
+    if remove_pedestal:
+        it = 0
+        while sum(hist[downs]) > lim_downssum and it < maxiter:
+            dres = minimize(mindowns, args=(bins, hist, downs),
+                            x0=(1, bins[len(bins) // 2], np.sqrt(bins[len(bins) // 2]), 0, 0))
+            hist -= gauss_hermite_poly(bins, *dres.x)
+            hist[hist < 0] = 0
+            downs, _ = find_peaks(-hist, distance=discrete, width=1)
+            it += 1
+    
+        if plot:
+            plt.plot(bins, hist)
 
     peaks, _ = find_peaks(hist, threshold=threshold, distance=discrete,
                           width=peak_width)
-    downs, _ = find_peaks(-hist, distance=discrete, width=1)
-    downs = np.sort(np.append([min(np.argmin(hist[bins < 0]),
-                                   downs[0] - int(discrete * 1.2))], downs))
+    if any(bins < 0):
+        firstdown = min(np.argmin(hist[bins < 0]),
+                        downs[0] - int(discrete * 1.2))
+    else:
+        firstdown = 0
+    downs = np.sort(np.append([firstdown], downs))
     if plot:
         plt.scatter(bins[peaks], hist[peaks])
         plt.scatter(bins[downs], hist[downs])
@@ -124,16 +134,16 @@ def hist2Q(hist, bins, discrete,
                 Q.append(sum(hist[dl:dt]))
             if method == 'fit':
                 res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
-                               x0=(hist[p], (bins[dt] + bins[dl]) /
-                                   2, bins[1] - bins[0], 0.0, 0.0),
+                               x0=(hist[p], bins[p], bins[1] - bins[0], 0.0, 0.0),
                                bounds=list(zip(
                                    [hist[p] / 2, bins[dl], bins[1] -
                                        bins[0], -0.01, -0.01],
-                                   [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 2, 0.01, 0.01])))
+                                   [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 6, 0.01, 0.01])))
                 popt = res.x
                 Q.append(peak_area(*popt))
                 if plot:
                     plt.plot(bins, gauss_hermite_poly(bins, *popt))
+            break
 
     if plot and method == 'fit':
         plt.plot(bins, hist)
@@ -160,13 +170,15 @@ class QStatisticsMaker:
         Method of the photocounting statistics construction.
             'sum' is a simple summation between minimums of the histogram
 
-            'fit' is a gauss-hermite function fitteing like in [1]
+            'fit' is a gauss-hermite function fitting like in [1]
     skiprows : int, optional
         Number of preamble rows in the file. The default is 0.
     plot : bool, optional
         Flag to plot hist and results of find_peaks.
         The default is False.
-
+    remove_pedestal : boolean
+        Flag to remove pedestal from the histogram
+        
     References
     ----------
     .. [1]
@@ -176,14 +188,16 @@ class QStatisticsMaker:
     """
 
     def __init__(self, fname, photon_discrete,
-                 peak_width=1, method='fit', skiprows=0, plot=False):
+                 peak_width=1, method='fit', skiprows=0, plot=False,
+                 remove_pedestal=True):
         self.photon_discrete = photon_discrete
         self.fname = fname
         self.plot = plot
 
         self._extract_data(skiprows)
         self.Q = hist2Q(self.hist, self.bins, discrete=self.points_discrete // 1.2,
-                        peak_width=peak_width, plot=self.plot, method=method)
+                        peak_width=peak_width, plot=self.plot, method=method,
+                        remove_pedestal=remove_pedestal)
 
     # Reading information from the file
     def _extract_data(self, skiprows):

@@ -136,6 +136,7 @@ def distort(Qcorr, p_crosstalk):
     Q[1:] = [genf(k) for k in range(1, N, 1)]
     return Q
 
+
 def compensate(Q, p_crosstalk):
     """
     Remove crosstalk noise from photocounting statistics.
