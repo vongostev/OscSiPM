@@ -11,7 +11,7 @@ from . import (g2, mean, normalize, P2Q, moment, fact)
 import logging
 
 
-log = logging.getLogger('sc_crosstalk')
+log = logging.getLogger('crosstalk')
 log.setLevel(logging.INFO)
 info = log.info
 
@@ -176,12 +176,12 @@ def optctp(_pct_param, Q, PDE, N, mtype, n_cells):
     p_crosstalk, poisson_mean = _pct_param
     pm = P2Q(ppoisson(poisson_mean, N), PDE, len(Q),
              mtype=mtype, n_cells=n_cells)
-    est = distort(pm, p_crosstalk)
-    gdelta = (g2(est) - g2(Q)) ** 2
-    return gdelta
+    est = compensate(Q, p_crosstalk)
+    return abs(g2(est) - g2(pm))
 
 
-def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100):
+def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
+                        min_pct=0, max_pct=0.1):
     """
     Brute searching of crosstalk probability
     by optimizing of g2 difference from noised data and
@@ -224,9 +224,10 @@ def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100):
 
     """
 
-    res = brute(optctp, ([0.00, 0.01], [mean(Q) / PDE * 0.9,
+    res = brute(optctp, ([min_pct, max_pct], [mean(Q) / PDE * 0.9,
                                         mean(Q) / PDE * 1.1]),
-                args=(Q, PDE, N, mtype, n_cells), Ns=Ns, full_output=True)
+                args=(Q, PDE, N, mtype, n_cells), Ns=Ns, full_output=True,
+                workers=-1)
     info("P_ct = {r[0][0]}, Δg(2) = {r[1]}".format(r=res))
     return res[0][0], OptimizeResult(x=res[0], fval=res[1],
                                      grid=res[2], Jout=res[3])
