@@ -16,18 +16,11 @@ log.setLevel(logging.INFO)
 info = log.info
 
 
-def ppoisson(pmean, N):
-    return np.array([pmean ** n * np.exp(-pmean) / fact(n) for n in range(N)])
-
-
 def d_crosstalk_4n(p_crosstalk):
     """
     Probabilities of k ≤ 5 triggered pixels for the 4-neighbours model
 
-    See table 1 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See table 1 in [1]
 
     Parameters
     ----------
@@ -39,6 +32,14 @@ def d_crosstalk_4n(p_crosstalk):
     ctnoise : ndarray
         Probability distributions of the total number
         of triggered pixels for a single initially fired pixel.
+
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+
     """
 
     q_crosstalk = (1 - p_crosstalk)
@@ -57,10 +58,7 @@ def p_crosstalk_m(m, k, p_crosstalk):
     """
     The probability of total number k of triggered pixels provided m primaries
 
-    See formula 2.20 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See formula 2.20 in [1]
 
     Parameters
     ----------
@@ -77,6 +75,14 @@ def p_crosstalk_m(m, k, p_crosstalk):
         The probability of total number k of triggered pixels
         provided m primaries
 
+
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+
     """
 
     ctnoise = d_crosstalk_4n(p_crosstalk)
@@ -88,30 +94,12 @@ def p_crosstalk_m(m, k, p_crosstalk):
                for i in range(1, k - m + 2, 1) if i <= 5)
 
 
-def p_crosstalk_m_pyomo(m, k, distr_crosstalk):
-    """
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    Model with 4 neighbors with saturation
-    See formula (14)
-    """
-    if m == 1:
-        if k > 4:
-            return 0
-        return distr_crosstalk[k]
-    return sum(p_crosstalk_m_pyomo(m - 1, k - i - 1, distr_crosstalk) * distr_crosstalk[i]
-               for i in range(1, k - m + 2, 1) if i <= 4)
-
-
 def distort(Qcorr, p_crosstalk):
     """
     Include crosstalk noise into photocounting statistics.
     We use model with 4 neighbors with saturation.
 
-    See formula 2.19 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See formula 2.19 in [1]
 
     Parameters
     ----------
@@ -124,6 +112,13 @@ def distort(Qcorr, p_crosstalk):
     -------
     Q : ndarray
         Noised photocounting statistics.
+
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
 
     """
 
@@ -142,10 +137,8 @@ def compensate(Q, p_crosstalk):
     Remove crosstalk noise from photocounting statistics.
     We use model with 4 neighbors with saturation.
 
-    See formula 2.21 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See formula 2.21 in [1]
+
 
     Parameters
     ----------
@@ -158,6 +151,13 @@ def compensate(Q, p_crosstalk):
     -------
     Qcorr : ndarray
         Denoised photocounting statistics.
+
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
 
     """
     N = len(Q)
@@ -173,14 +173,43 @@ def compensate(Q, p_crosstalk):
 
 
 def optctp(_pct_param, Q, PDE, N, mtype, n_cells):
+    """
+    Optimization function
+
+    Parameters
+    ----------
+    _pct_param : TYPE
+        DESCRIPTION.
+    Q : iterable
+        Experimental photocounting statistics of a laser source.
+    PDE : float
+        PDE of the detector.
+    N : int
+        Size of poisson photon-number statistics.
+    mtype : {'binomial', 'subbinomial'}, optional
+        Type of the detector: ideal is binomial, realistic is subbinomial,
+        but in the most of applications one can consider the detector as binomial
+        The default is 'binomial'.
+    n_cells : TYPE, optional
+        Number of photocounting cells in the subbinomial case. The default is 0.
+
+    Returns
+    -------
+    discrepancy : float
+        Abcolute difference of g2 of poisson photocounting statistics
+        and g2 of compensated experimental statistics.
+
+    """
+    
     p_crosstalk, poisson_mean = _pct_param
-    pm = P2Q(ppoisson(poisson_mean, N), PDE, len(Q),
-             mtype=mtype, n_cells=n_cells)
+    P = [poisson_mean ** n * np.exp(-poisson_mean) / fact(n) 
+         for n in range(N)]
+    pm = P2Q(P, PDE, len(Q), mtype, n_cells)
     est = compensate(Q, p_crosstalk)
     return abs(g2(est) - g2(pm))
 
 
-def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
+def find_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
                         min_pct=0, max_pct=0.1):
     """
     Brute searching of crosstalk probability
@@ -188,10 +217,7 @@ def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
     noised poisson photocounting statistics.
     We use model with 4 neighbors with saturation.
 
-    See
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See [1]
 
     Parameters
     ----------
@@ -222,10 +248,17 @@ def optimize_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
         optimal poisson photon-number distribution
         p_crosstalk is in res.x0[0]
 
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    
     """
 
     res = brute(optctp, ([min_pct, max_pct], [mean(Q) / PDE * 0.9,
-                                        mean(Q) / PDE * 1.1]),
+                                              mean(Q) / PDE * 1.1]),
                 args=(Q, PDE, N, mtype, n_cells), Ns=Ns, full_output=True,
                 workers=-1)
     info("P_ct = {r[0][0]}, Δg(2) = {r[1]}".format(r=res))
@@ -238,10 +271,7 @@ def Q2total_pcrosstalk(Q):
     Calculate model independent total crosstalk probability.
     It's may be vary from the result of optimize_pcrosstalk
 
-    See formula 2.23 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See formula 2.23 in [1]
 
     Parameters
     ----------
@@ -252,6 +282,13 @@ def Q2total_pcrosstalk(Q):
     -------
     epsilon : float
         The total crosstalk probability.
+
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf        
 
     """
 
@@ -265,10 +302,7 @@ def total_pcrosstalk(p_crosstalk):
     the probability of single crosstalk event.
     We use model with 4 neighbors with saturation
 
-    See text after formula 2.1 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See text after formula 2.1 in [1]
 
     Parameters
     ----------
@@ -280,19 +314,41 @@ def total_pcrosstalk(p_crosstalk):
     epsilon : float
         The total crosstalk probability.
 
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    
     """
 
     return 1 - (1 - p_crosstalk)**4
+
+
+def single_pcrosstalk(total_pcrosstalk):
+    """
+    Inverse formula to ``total_pcrosstalk''
+
+    Parameters
+    ----------
+    total_pcrosstalk : float
+        The probability of total crosstalk events.
+
+    Returns
+    -------
+    p_crosstalk : float
+        The probability of a single crosstalk event.
+
+    """
+    return 1 - (1 - total_pcrosstalk) ** 0.25
 
 
 def ENF(p_crosstalk):
     """
     Calculate excess noise factor (ENF) of the detector
 
-    See formulas 2.16, 2.17 and 2.27 in
-    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
-    Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    See formulas 2.16, 2.17 and 2.27 in [1]
 
     Parameters
     ----------
@@ -304,6 +360,13 @@ def ENF(p_crosstalk):
     ENF : float
         Excess noise factor.
 
+    References
+    ----------
+    .. [1]
+    Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
+    Journal of instrumentation 8.05 (2013): P05010.
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
+    
     """
 
     d = d_crosstalk_4n(p_crosstalk)

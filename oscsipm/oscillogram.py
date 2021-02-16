@@ -4,7 +4,12 @@ Created on Thu Jul  4 16:25:54 2019
 
 @author: Pavel Gostev
 """
+from os.path import isfile, join
+from os import listdir
+import time
+
 import gc
+
 from dataclasses import dataclass
 
 import lecroyparser
@@ -12,10 +17,10 @@ from . import tekwfm as tek
 
 from scipy.sparse.linalg import spsolve
 from scipy import sparse
+from scipy.signal import find_peaks
+
 import numpy as np
-from os.path import isfile, join
-from os import listdir
-import time
+
 from compress_pickle import dump, load
 from joblib import Parallel, delayed
 
@@ -84,7 +89,7 @@ def correct_baseline(y, lam=1e5, p=0.1):
     return y - baseline_values
 
 
-def single_pulse(y):
+def single_pulse(y, method='max'):
     """
     Get amplitude of the single pulse
 
@@ -93,16 +98,24 @@ def single_pulse(y):
     y : ndarray
         Oscillogram of the single pulse.
 
-    Returns
-    -------
-    Amplitude : float
-        Maximum amplitude of the pulse.
+    method : str ('max', 'sum')
 
     """
-    return max(y)
+    if method == 'sum':
+        return np.sum(y[y >= 0], dtype=float)
+    elif method == 'max':
+        return max(y)
 
 
-def periodic_pulse(data, frequency, time_window):
+def random_pulse(y, method='max'):
+    if method == 'sum':
+        return np.sum(y, dtype=float)
+    elif method == 'max':
+        peaks, _ = find_peaks(y[y > 0], distance=50, width=10)
+        return sum(y[y > 0][peaks])
+
+
+def periodic_pulse(data, frequency, time_window, method='max'):
     discretedata = []
     points_period = int(1 / frequency / data.horizInterval) + 1
     points_window = int(time_window / data.horizInterval) + 1
@@ -118,15 +131,15 @@ def periodic_pulse(data, frequency, time_window):
         else:
             low = p - points_window // 2
             top = p + points_window // 2
-        discretedata.append(single_pulse(y[low:top]))
+        discretedata.append(single_pulse(y[low:top], method=method))
     return discretedata
 
 
-def scope_unwindowed(data, time_discrete):
+def scope_unwindowed(data, time_discrete, method='max'):
     points_discrete = int(time_discrete // data.horizInterval)
     y = data.y
     points_discrete += 1
-    discretedata = [single_pulse(y[i:i + points_discrete])
+    discretedata = [random_pulse(y[i:i + points_discrete], method=method)
                     for i in range(0, len(y), points_discrete)]
     return discretedata
 
@@ -170,7 +183,7 @@ class PulsesHistMaker:
     fsoffset: int = 0
         Skip files from the first ine in the datadir
     fchunksize: int = 10
-        The size of chunk for parallel peocessing
+        The size of chunk for parallel processing
     parallel: bool = False
         Use joblib or not?
     parallel_jobs: int = -1
@@ -183,6 +196,8 @@ class PulsesHistMaker:
         Can be change in methods 'make_hist' and 'get_hist'
     correct_baseline: bool = True
         Correct baseline of not?
+    method : str = 'max'
+        Method of pulses counting. Can be 'max' or 'sum'
     vendor: str = 'lecroy'
         Vendor name. Can be 'tek' or 'lecroy'
     """
@@ -197,6 +212,9 @@ class PulsesHistMaker:
     histbins: int = 2000
     correct_baseline: bool = True
 
+    method: str = 'max'
+    methods: tuple = ('sum', 'max')
+
     vendor: str = 'lecroy'
     vendors: tuple = ('lecroy', 'tek')
 
@@ -206,6 +224,9 @@ class PulsesHistMaker:
         if self.vendor not in self.vendors:
             raise ValueError('vendor must be in %s, not %s' %
                              (self.vendors, self.vendor))
+        if self.method not in self.methods:
+            raise ValueError('method must be in %s, not %s' %
+                             (self.methods, self.method))
 
     def read(self, fsnum=-1, parallel_read=False):
         if fsnum == -1:
@@ -241,16 +262,16 @@ class PulsesHistMaker:
         i = 1
         for d in self.rawdata:
             x, y = windowed(d, div_start, div_width)
-            self.discretedata.append(single_pulse(y))
+            self.discretedata.append(single_pulse(y, self.method))
             i += 1
         self.make_hist(self.histbins)
 
     def multi_pulse_histogram(self, frequency=2.5e6, time_window=7.5e-9):
-        self.parse(periodic_pulse, (frequency, time_window))
+        self.parse(periodic_pulse, (frequency, time_window, self.method))
         self.make_hist(self.histbins)
 
     def unwindowed_histogram(self, time_discrete=15e-9):
-        self.parse(scope_unwindowed, (time_discrete,))
+        self.parse(scope_unwindowed, (time_discrete, self.method))
         self.make_hist(self.histbins)
 
     def parse(self, func, args):
