@@ -18,7 +18,7 @@ def loadhist(path, **kwargs):
         except (ValueError, TypeError, FileNotFoundError, IOError) as E:
             np.warnings.warn_explicit(
                 'Histogram parsing with delimiter' + r' "%s": %s' % (dl, E),
-                IOError, __file__, 18)
+                IOError, __file__, 17)
             continue
         else:
             return bins, hist
