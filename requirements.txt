@@ -5,3 +5,4 @@ lecroyparser
 joblib
 dataclasses
 compress_pickle
+tekwfm2

@@ -13,7 +13,7 @@ import gc
 from dataclasses import dataclass
 
 import lecroyparser
-from . import tekwfm as tek
+import tekwfm2 as tek
 
 from scipy.sparse.linalg import spsolve
 from scipy import sparse
