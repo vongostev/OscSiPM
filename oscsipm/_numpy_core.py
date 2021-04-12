@@ -13,7 +13,7 @@ import numpy as np
 from scipy.special import factorial
 
 __all__ = ['compose', 'lrange', 'fact', 'p_convolve', 'moment', 'mean', 'g2', 
-           'normalize', 'abssum', 'fidelity', 'entropy']
+           'normalize', 'abssum', 'fidelity', 'entropy', 'DPREC']
 
 try:
     DPREC = np.float128

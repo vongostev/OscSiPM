@@ -79,7 +79,7 @@ def hist2Q(hist, bins, discrete,
             'sum' is a simple summation between minimums of the histogram
 
             'fit' is a gauss-hermite function fitteing like in [1]
-            
+
             'manual' is a simple summation of intervals with fixed length
     remove_pedestal : boolean
         Flag to remove pedestal noise from the histogram
@@ -102,6 +102,7 @@ def hist2Q(hist, bins, discrete,
     """
     discrete = int(discrete * 0.9)
     downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
+    bins *= 1e3
 
     if remove_pedestal:
         it = 0
@@ -172,6 +173,8 @@ def hist2Q(hist, bins, discrete,
 
     if plot:
         plt.plot(bins, hist)
+        plt.xlabel('Amplitude, mV')
+        plt.ylabel("Events' number")
         plt.show()
 
     return normalize(Q)
@@ -207,7 +210,7 @@ class QStatisticsMaker:
             'sum' is a simple summation between minimums of the histogram
 
             'fit' is a gauss-hermite function fitteing like in [1]
-            
+
             'manual' is a simple summation of intervals with fixed length
     skiprows : int, optional
         Number of preamble rows in the file. The default is 0.
@@ -226,7 +229,7 @@ class QStatisticsMaker:
     """
 
     def __init__(self, fname, photon_discrete,
-                 peak_width=1, down_width=1, method='fit', skiprows=0, 
+                 peak_width=1, down_width=1, method='fit', skiprows=0,
                  plot=False, logplot=False,
                  remove_pedestal=True):
         self.photon_discrete = photon_discrete
