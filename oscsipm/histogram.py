@@ -121,12 +121,6 @@ def hist2Q(hist, bins, discrete,
                           width=peak_width, plateau_size=(0, 10))
     peaks -= 1
 
-    if any(bins < 0):
-        firstdown = min(np.argmin(hist[bins < 0]),
-                        downs[0] - int(discrete * 1.2))
-    elif 0 not in peaks:
-        firstdown = 0
-        downs = np.sort(np.append([firstdown], downs))
     if plot:
         plt.scatter(bins[peaks], hist[peaks])
         plt.scatter(bins[downs], hist[downs])
