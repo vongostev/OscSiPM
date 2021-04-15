@@ -43,6 +43,44 @@ def mindowns(popt, bins, hist, downs):
     return np.linalg.norm((hist - gauss_hermite_poly(bins, *popt))[downs])
 
 
+def construct_q_sum(hist, peaks, downs):
+    Q = []
+    for i in lrange(downs)[:-1]:
+        for p in peaks:
+            dl = downs[i]
+            dt = downs[i+1]
+            if p < dl or p > dt:
+                continue
+            Q.append(sum(hist[dl:dt]))
+            break
+    return Q
+
+
+def construct_q_fit(hist, bins, peaks, downs):
+    Q = []
+    for i in lrange(downs)[:-1]:
+        for p in peaks:
+
+            dl = downs[i]
+            dt = downs[i+1]
+
+            if p < dl or p > dt:
+                continue
+            res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
+                           x0=(hist[p], bins[p], bins[1] -
+                               bins[0], 0.0, 0.0),
+                           bounds=list(zip(
+                               [hist[p] / 2, bins[dl], bins[1] -
+                                   bins[0], -0.01, -0.01],
+                               [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 8, 0.01, 0.01])))
+            popt = res.x
+            Q.append(peak_area(*popt))
+            # if plot:
+            #     plt.plot(bins, gauss_hermite_poly(bins, *popt))
+            break
+    return Q
+
+
 def hist2Q(hist, bins, discrete,
            threshold=1, peak_width=1, down_width=1,
            method='sum', remove_pedestal=1, lim_downssum=1, maxiter=20,
@@ -102,13 +140,14 @@ def hist2Q(hist, bins, discrete,
     """
     discrete = int(discrete * 0.9)
     downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
-    bins *= 1e3
+    bins *= 1e3  # Convert to mV
 
     if remove_pedestal:
         it = 0
         while sum(hist[downs]) > lim_downssum and it < maxiter:
+            middle_point = bins[len(bins) // 2]
             dres = minimize(mindowns, args=(bins, hist, downs),
-                            x0=(1, bins[len(bins) // 2], np.sqrt(bins[len(bins) // 2]), 0, 0))
+                            x0=(1, middle_point, np.sqrt(middle_point), 0, 0))
             hist -= gauss_hermite_poly(bins, *dres.x)
             hist[hist < 0] = 0
             downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
@@ -119,6 +158,8 @@ def hist2Q(hist, bins, discrete,
 
     peaks, _ = find_peaks(np.concatenate(([0], hist)), threshold=threshold, distance=discrete,
                           width=peak_width, plateau_size=(0, 10))
+    if peaks == []:
+        raise ValueError('Histogram peaks were not found with given settings')
     peaks -= 1
 
     if plot:
@@ -141,29 +182,10 @@ def hist2Q(hist, bins, discrete,
             Q.append(sum(hist[top:]))
 
     else:
-        for i in lrange(downs)[:-1]:
-            for p in peaks:
-
-                dl = downs[i]
-                dt = downs[i+1]
-
-                if p < dl or p > dt:
-                    continue
-                if method == 'sum':
-                    Q.append(sum(hist[dl:dt]))
-                if method == 'fit':
-                    res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
-                                   x0=(hist[p], bins[p], bins[1] -
-                                       bins[0], 0.0, 0.0),
-                                   bounds=list(zip(
-                                       [hist[p] / 2, bins[dl], bins[1] -
-                                           bins[0], -0.01, -0.01],
-                                       [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 8, 0.01, 0.01])))
-                    popt = res.x
-                    Q.append(peak_area(*popt))
-                    if plot:
-                        plt.plot(bins, gauss_hermite_poly(bins, *popt))
-                break
+        if method == 'sum':
+            construct_q_sum(hist, peaks, downs)
+        elif method == 'fit':
+            construct_q_fit(hist, bins, peaks, downs)
 
     if plot:
         plt.plot(bins, hist)
@@ -256,5 +278,4 @@ class QStatisticsMaker:
 
         """
 
-        self.Q = self.Q[self.Q > 0]
-        return normalize(self.Q)
+        return normalize(self.Q[self.Q > 0])
