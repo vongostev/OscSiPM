@@ -140,7 +140,6 @@ def hist2Q(hist, bins, discrete,
     """
     discrete = int(discrete * 0.9)
     downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
-    bins *= 1e3  # Convert to mV
 
     if remove_pedestal:
         it = 0
@@ -166,8 +165,8 @@ def hist2Q(hist, bins, discrete,
         plt.scatter(bins[peaks], hist[peaks])
         plt.scatter(bins[downs], hist[downs])
 
-    Q = []
     if method == 'manual':
+        Q = []
         discrete = peaks[2] - peaks[1]
         for p in peaks:
             low = int(max(0, p - discrete // 2))
@@ -183,13 +182,13 @@ def hist2Q(hist, bins, discrete,
 
     else:
         if method == 'sum':
-            construct_q_sum(hist, peaks, downs)
+            Q = construct_q_sum(hist, peaks, downs)
         elif method == 'fit':
-            construct_q_fit(hist, bins, peaks, downs)
+            Q = construct_q_fit(hist, bins, peaks, downs)
 
     if plot:
         plt.plot(bins, hist)
-        plt.xlabel('Amplitude, mV')
+        plt.xlabel('Amplitude, V')
         plt.ylabel("Events' number")
         plt.show()
 

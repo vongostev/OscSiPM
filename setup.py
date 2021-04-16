@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="oscsipm",
-    version="0.2.1",
+    version="0.3.0",
     author="Pavel Gostev",
     author_email="gostev.pavel@physics.msu.ru",
     description="Instruments to make photocounting statistics from histograms and raw oscillograms",
@@ -20,13 +20,13 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     include_package_data=True,
-    install_requires = [
-          'numpy',
-          'scipy',
-          'matplotlib',
-          'lecroyparser',
-          'joblib',
-          'dataclasses',
-          'compress_pickle'
-          ],
+    install_requires=[
+        'numpy',
+        'scipy',
+        'matplotlib',
+        'lecroyparser',
+        'joblib',
+        'dataclasses',
+        'compress_pickle'
+    ],
 )

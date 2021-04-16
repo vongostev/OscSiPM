@@ -12,11 +12,11 @@ Created on Fri Oct 02 08:39:31 2019
 import numpy as np
 
 from ._numpy_core import normalize
-from ._dmatrix import binomial_t_matrix, subbinomial_t_matrix
-from ._dmatrix import binomial_invt_matrix, subbinomial_invt_matrix
+from ._dmatrix import d_binomial, d_subbinomial
+from ._dmatrix import invd_binomial, invd_subbinomial
 
 
-def t_matrix(qe: float, N: int, M: int, mtype='binomial', n_cells=0):
+def d_matrix(qe: float, N: int, M: int, mtype: str = 'binomial', n_cells: int = 0):
     """
     Method for construction of binomial or subbinomial photodetection matrix
     with size NxM
@@ -50,9 +50,9 @@ def t_matrix(qe: float, N: int, M: int, mtype='binomial', n_cells=0):
     """
 
     if mtype == 'binomial':
-        return binomial_t_matrix(qe, N, M)
+        return d_binomial(qe, N, M)
     elif mtype == 'subbinomial':
-        return subbinomial_t_matrix(qe, N, M, n_cells)
+        return d_subbinomial(qe, N, M, n_cells)
     else:
         raise ValueError("""
                          Can't construct detection matrix of type %s
@@ -60,7 +60,7 @@ def t_matrix(qe: float, N: int, M: int, mtype='binomial', n_cells=0):
                          """ % mtype)
 
 
-def invt_matrix(qe, N, M, mtype='binomial', n_cells=0):
+def invd_matrix(qe: float, N: int, M: int, mtype: str = 'binomial', n_cells: int = 0):
     """
     Method for construction of binomial or
     subbinomial inverse photodetection matrix
@@ -94,9 +94,9 @@ def invt_matrix(qe, N, M, mtype='binomial', n_cells=0):
 
     """
     if mtype == 'binomial':
-        return binomial_invt_matrix(qe, N, M)
+        return invd_binomial(qe, N, M)
     elif mtype == 'subbinomial':
-        return subbinomial_invt_matrix(qe, N, M, n_cells)
+        return invd_subbinomial(qe, N, M, n_cells)
     else:
         raise ValueError("""
                          Can't construct inversed detection matrix of type %s
@@ -104,7 +104,7 @@ def invt_matrix(qe, N, M, mtype='binomial', n_cells=0):
                          """ % mtype)
 
 
-def P2Q(P: np.ndarray, qe: float, M=0, mtype='binomial', n_cells=0):
+def P2Q(P: np.ndarray, qe: float, M: int = 0, mtype: str = 'binomial', n_cells: int = 0):
     """
     Method for calculation of photocounting statistics
     from photon-number statistics
@@ -135,7 +135,7 @@ def P2Q(P: np.ndarray, qe: float, M=0, mtype='binomial', n_cells=0):
     N = len(P)
     if M == 0:
         M = N
-    return normalize(t_matrix(qe, N, M, mtype, n_cells).dot(P))
+    return normalize(d_matrix(qe, N, M, mtype, n_cells).dot(P))
 
 
 def Q2P(Q: np.ndarray, qe: float, N=0, mtype='binomial', n_cells=0):
@@ -172,4 +172,4 @@ def Q2P(Q: np.ndarray, qe: float, N=0, mtype='binomial', n_cells=0):
         Q = np.concatenate((Q, np.zeros(N - M)))
         M = N
 
-    return normalize(invt_matrix(qe, M, N, mtype, n_cells).dot(Q))
+    return normalize(invd_matrix(qe, M, N, mtype, n_cells).dot(Q))

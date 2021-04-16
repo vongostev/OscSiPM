@@ -5,9 +5,11 @@ Created on Tue Aug 27 20:51:49 2019
 @author: Pavel Gostev
 """
 import numpy as np
+from functools import lru_cache
 
 from scipy.optimize import brute, OptimizeResult
-from . import (g2, mean, normalize, P2Q, moment, fact)
+from scipy.stats import poisson
+from . import (g2, mean, normalize, P2Q, moment)
 import logging
 
 
@@ -16,7 +18,7 @@ log.setLevel(logging.INFO)
 info = log.info
 
 
-def d_crosstalk_4n(p_crosstalk):
+def d_crosstalk_4n(p_crosstalk: float):
     """
     Probabilities of k ≤ 5 triggered pixels for the 4-neighbours model
 
@@ -54,7 +56,8 @@ def d_crosstalk_4n(p_crosstalk):
     return ctnoise
 
 
-def p_crosstalk_m(m, k, p_crosstalk):
+@lru_cache(maxsize=None)
+def p_crosstalk_m(m: int, k: int, p_crosstalk: float):
     """
     The probability of total number k of triggered pixels provided m primaries
 
@@ -94,7 +97,7 @@ def p_crosstalk_m(m, k, p_crosstalk):
                for i in range(1, k - m + 2, 1) if i <= 5)
 
 
-def distort(Qcorr, p_crosstalk):
+def distort(Qcorr: np.array, p_crosstalk: float):
     """
     Include crosstalk noise into photocounting statistics.
     We use model with 4 neighbors with saturation.
@@ -126,13 +129,15 @@ def distort(Qcorr, p_crosstalk):
     Q = np.zeros(N)
     Q[0] = Qcorr[0]
 
-    def genf(k):
+    @np.vectorize
+    def point(k):
         return sum(Qcorr[m] * p_crosstalk_m(m, k, p_crosstalk) for m in range(1, k + 1, 1))
-    Q[1:] = [genf(k) for k in range(1, N, 1)]
+
+    Q[1:] = point(np.arange(1, N))
     return Q
 
 
-def compensate(Q, p_crosstalk):
+def compensate(Q: np.array, p_crosstalk: float):
     """
     Remove crosstalk noise from photocounting statistics.
     We use model with 4 neighbors with saturation.
@@ -165,11 +170,13 @@ def compensate(Q, p_crosstalk):
     Qcorr = np.zeros(N)
     Qcorr[0] = Q[0]
     Qcorr[1] = Q[1] / (1 - eps)
-    for m in range(2, N, 1):
-        Qcorr[m] = (1 - eps) ** -m * \
-            (Q[m] - sum(Qcorr[k] * p_crosstalk_m(k, m, p_crosstalk)
-                        for k in range(1, m, 1)))
-    return normalize(np.abs(Qcorr))
+    for m in range(2, N):
+        c1 = (1 - eps) ** -m
+        c2 = Q[m] - sum(Qcorr[k] * p_crosstalk_m(k, m, p_crosstalk)
+                        for k in range(1, m))
+        Qcorr[m] = c1 * c2
+
+    return normalize(Qcorr)
 
 
 def optctp(_pct_param, Q, PDE, N, mtype, n_cells):
@@ -200,17 +207,17 @@ def optctp(_pct_param, Q, PDE, N, mtype, n_cells):
         and g2 of compensated experimental statistics.
 
     """
-    
+
     p_crosstalk, poisson_mean = _pct_param
-    P = [poisson_mean ** n * np.exp(-poisson_mean) / fact(n) 
-         for n in range(N)]
-    pm = P2Q(P, PDE, len(Q), mtype, n_cells)
-    est = compensate(Q, p_crosstalk)
-    return abs(g2(est) - g2(pm))
+    P = poisson.pmf(np.arange(N), poisson_mean)
+    Qtheory = P2Q(P, PDE, len(Q), mtype, n_cells)
+    Qest = compensate(Q, p_crosstalk)
+    return abs(g2(Qest) - g2(Qtheory))
 
 
-def find_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
-                        min_pct=0, max_pct=0.1):
+def find_pcrosstalk(Q: np.array, PDE: float, N: int,
+                    mtype: str = 'binomial', n_cells: int = 0,
+                    Ns: int = 100, min_pct: float = 0, max_pct: float = 0.1):
     """
     Brute searching of crosstalk probability
     by optimizing of g2 difference from noised data and
@@ -254,7 +261,7 @@ def find_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
     Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
     Journal of instrumentation 8.05 (2013): P05010.
     https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
-    
+
     """
 
     res = brute(optctp, ([min_pct, max_pct], [mean(Q) / PDE * 0.9,
@@ -266,7 +273,7 @@ def find_pcrosstalk(Q, PDE, N, mtype='binomial', n_cells=0, Ns=100,
                                      grid=res[2], Jout=res[3])
 
 
-def Q2total_pcrosstalk(Q):
+def Q2total_pcrosstalk(Q: np.array):
     """
     Calculate model independent total crosstalk probability.
     It's may be vary from the result of optimize_pcrosstalk
@@ -288,7 +295,7 @@ def Q2total_pcrosstalk(Q):
     .. [1]
     Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
     Journal of instrumentation 8.05 (2013): P05010.
-    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf        
+    https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
 
     """
 
@@ -296,7 +303,7 @@ def Q2total_pcrosstalk(Q):
     return 1 - Q[1] / mu / np.exp(- mu)
 
 
-def total_pcrosstalk(p_crosstalk):
+def total_pcrosstalk(p_crosstalk: float):
     """
     Calculate total crosstalk probability from
     the probability of single crosstalk event.
@@ -320,13 +327,13 @@ def total_pcrosstalk(p_crosstalk):
     Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
     Journal of instrumentation 8.05 (2013): P05010.
     https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
-    
+
     """
 
     return 1 - (1 - p_crosstalk)**4
 
 
-def single_pcrosstalk(total_pcrosstalk):
+def single_pcrosstalk(total_pcrosstalk: float):
     """
     Inverse formula to ``total_pcrosstalk''
 
@@ -344,7 +351,7 @@ def single_pcrosstalk(total_pcrosstalk):
     return 1 - (1 - total_pcrosstalk) ** 0.25
 
 
-def ENF(p_crosstalk):
+def ENF(p_crosstalk: float):
     """
     Calculate excess noise factor (ENF) of the detector
 
@@ -366,7 +373,7 @@ def ENF(p_crosstalk):
     Gallego, L., et al. "Modeling crosstalk in silicon photomultipliers."
     Journal of instrumentation 8.05 (2013): P05010.
     https://iopscience.iop.org/article/10.1088/1748-0221/8/05/P05010/pdf
-    
+
     """
 
     d = d_crosstalk_4n(p_crosstalk)
@@ -374,3 +381,4 @@ def ENF(p_crosstalk):
     e1 = moment(d[:5], 1) + d[5] * (1 + 4*r) / r ** 2
     var1 = moment(d[:5], 2) + d[5] * (2 + 7*r + 16 * r ** 2) / r ** 3 - e1 ** 2
     return 1 + var1 / e1 ** 2
+#

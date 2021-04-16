@@ -50,15 +50,12 @@ def list_files(datadir, vendor, fsoffset, fsnum):
 
 
 def parse_files(oscfiles, vendor, fsnum=0, parallel=False):
+    n_jobs = -1 if parallel else 1
 
     if fsnum > 0:
         oscfiles = oscfiles[:fsnum]
-    if parallel:
-        data = Parallel(
-            n_jobs=-1)([delayed(parse_file)(df, vendor) for df in oscfiles])
-    else:
-        data = [parse_file(df, vendor) for df in oscfiles]
-    return data
+    return Parallel(
+        n_jobs=n_jobs)([delayed(parse_file)(df, vendor) for df in oscfiles])
 
 
 def windowed(data, div_start, div_width):
@@ -157,10 +154,8 @@ def memo_oscillogram(data, vendor, correct_bs=True):
 
     y = filedata[1].y
     y -= np.min(y)
-    if correct_bs:
-        filedata[1].y = correct_baseline(y)
-    else:
-        filedata[1].y = y
+    filedata[1].y = correct_baseline(y) if correct_bs else y
+
     return filedata
 
 
@@ -280,10 +275,11 @@ class PulsesHistMaker:
         for i in range(0, self.filesnum, self.fchunksize):
             t = time.time()
             hb = min(i + self.fchunksize, self.filesnum)
-            self.rawdata[i:hb] = Parallel(n_jobs=self.parallel_jobs)([
-                delayed(memo_oscillogram)(
-                    df, self.vendor, self.correct_baseline)
-                for df in self.rawdata[i:hb]])
+            self.rawdata[i:hb] = Parallel(
+                n_jobs=self.parallel_jobs)(
+                    delayed(memo_oscillogram)(
+                        df, self.vendor, self.correct_baseline)
+                for df in self.rawdata[i:hb])
             pulsesdata = [func(df[1], *args) for df in self.rawdata[i:hb]]
             self.discretedata += pulsesdata
 

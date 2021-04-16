@@ -12,16 +12,15 @@ import functools
 import numpy as np
 from scipy.special import factorial
 
-__all__ = ['compose', 'lrange', 'fact', 'p_convolve', 'moment', 'mean', 'g2', 
+__all__ = ['compose', 'lrange', 'fact', 'p_convolve', 'moment', 'mean', 'g2',
            'normalize', 'abssum', 'fidelity', 'entropy', 'DPREC']
 
 try:
     DPREC = np.float128
 except AttributeError:
     DPREC = np.float64
-    np.warnings.warn_explicit(
-        "Numpy.float128 can not be used. DPREC is numpy.float64, results may be unprecise.",
-        RuntimeWarning, __file__, 19)
+    print('%s:%s:' % (__file__, 19), 'RuntimeWarning:',
+          "Numpy.float128 can not be used. DPREC is numpy.float64, results may be unprecise.")
 
 
 def compose(*functions):
