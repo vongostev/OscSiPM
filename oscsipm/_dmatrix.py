@@ -15,13 +15,11 @@ from ._numpy_core import DPREC
 def d_binomial(qe: float, N: int, M: int):
     m = np.arange(M).reshape((-1, 1))
     n = np.arange(N).reshape((1, -1))
-    d_matrix = comb(n, m, exact=False) * qe ** m * \
-        (1 - qe)**(n - m)
-    return d_matrix
+    return comb(n, m, exact=False) * qe ** m * (1 - qe)**(n - m)
 
 
 def invd_binomial(qe: float, N: int, M: int, n_cells: int = 0):
-    return d_binomial(1 / qe, N, M)
+    return d_binomial(1 / qe, M, N)
 
 
 @lru_cache(maxsize=None)
