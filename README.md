@@ -1,7 +1,7 @@
 ![OscSiPM](https://github.com/vongostev/OscSiPM/workflows/OscSiPM/badge.svg?branch=main) [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/vongostev/OscSiPM.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/vongostev/OscSiPM/context:python)
 
 # OscSiPM
-Instruments to make photocounting statistics from histograms and raw oscillograms (made by LeCroy oscilloscope or old Tektronix oscilloscope) of SiPM signal. One can correct the baseline of the oscillogram and compensate a crosstalk noise of photocounting statistics.
+Instruments to make a photocounting statistics from histograms and raw oscillograms (made by LeCroy oscilloscope or old Tektronix oscilloscope) of SiPM signal. One can correct the baseline of the oscillogram and compensate a crosstalk noise in the photocounting statistics.
 
 # Installation
 OscSiPM is available at pip. It may be installed with
@@ -11,7 +11,7 @@ pip install oscsipm
 # How to use?
 Import necessary modules:
 ```python
-from oscsipm import PulsesHistMaker, QStatisticsMaker, optimize_pcrosstalk, compensate
+from oscsipm import PulsesHistMaker, QStatisticsMaker, find_pcrosstalk, compensate
 ```
 Import an experimental data
 ```python
@@ -34,7 +34,7 @@ Q = qmaker.getq()
 Determine a crosstalk probability (if an optical signal is coherent) and compensate it
 ```python
 PDE = 0.4
-pcrosstalk, res = optimize_pcrosstalk(Q, PDE, N=50)
+pcrosstalk, res = find_pcrosstalk(Q, PDE, N=50)
 Q1 = compensate(Q, pcrosstalk)
 ```
 # Requirements
