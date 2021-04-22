@@ -6,3 +6,4 @@ joblib
 dataclasses
 compress_pickle
 tekwfm2
+fpdet

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="oscsipm",
-    version="0.3.1",
+    version="0.4.0",
     author="Pavel Gostev",
     author_email="gostev.pavel@physics.msu.ru",
     description="Instruments to make photocounting statistics from histograms and raw oscillograms",
@@ -27,6 +27,8 @@ setuptools.setup(
         'lecroyparser',
         'joblib',
         'dataclasses',
-        'compress_pickle'
+        'compress_pickle',
+		'tekwfm2',
+		'fpdet'
     ],
 )

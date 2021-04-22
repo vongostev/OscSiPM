@@ -9,7 +9,7 @@ from functools import lru_cache
 
 from scipy.optimize import brute, OptimizeResult
 from scipy.stats import poisson
-from . import (g2, mean, normalize, P2Q, moment)
+from fpdet import (g2, mean, normalize, P2Q, moment)
 import logging
 
 

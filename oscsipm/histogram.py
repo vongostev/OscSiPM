@@ -2,7 +2,7 @@
 """
 @author: Pavel Gostev
 """
-from ._numpy_core import normalize, lrange
+from fpdet import normalize, lrange
 
 import numpy as np
 from scipy.signal import find_peaks
