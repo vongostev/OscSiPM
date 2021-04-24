@@ -16,7 +16,7 @@ from oscsipm import PulsesHistMaker, QStatisticsMaker, find_pcrosstalk, compensa
 Import an experimental data
 ```python
 datadir = "C:\\expdata\\"
-parser = PulsesHistMaker(datadir, vendor='tek', parallel=True, parallel_jobs=2)
+parser = PulsesHistMaker(datadir, vendor='tek', parallel=True, parallel_jobs=-2)
 parser.read()
 ```
 Make a histogram
@@ -28,7 +28,7 @@ parser.save_hist(histfile)
 Make a photocounting statistics
 ```python
 histfile = "C:\\histograms\\test.txt"
-qmaker = QStatisticsMaker(histfile, discrete=0.021, method='fit')
+qmaker = QStatisticsMaker(histfile, amplitude_discrete=0.021, method='fit')
 Q = qmaker.getq()
 ```
 Determine a crosstalk probability (if an optical signal is coherent) and compensate it
