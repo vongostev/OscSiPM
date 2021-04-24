@@ -20,14 +20,20 @@ from scipy import sparse
 from scipy.signal import find_peaks
 
 import numpy as np
+import numba as nb
 
 from compress_pickle import dump, load
 from joblib import Parallel, delayed
+from itertools import islice
 
 gc.enable()
 
 VENDOR_EXT = {'tek': 'wfm',
               'lecroy': 'trc'}
+
+
+def parallelize(func, data, n_jobs, *func_args):
+    return Parallel(n_jobs=n_jobs)(delayed(func)(d, *func_args) for d in data)
 
 
 def parse_file(datafile, vendor):
@@ -49,13 +55,10 @@ def list_files(datadir, vendor, fsoffset, fsnum):
     return lf
 
 
-def parse_files(oscfiles, vendor, fsnum=0, parallel=False):
-    n_jobs = -1 if parallel else 1
-
+def parse_files(oscfiles, vendor, fsnum=0):
     if fsnum > 0:
         oscfiles = oscfiles[:fsnum]
-    return Parallel(
-        n_jobs=n_jobs)([delayed(parse_file)(df, vendor) for df in oscfiles])
+    return [parse_file(df, vendor) for df in oscfiles]
 
 
 def windowed(data, div_start, div_width):
@@ -86,7 +89,8 @@ def correct_baseline(y, lam=1e5, p=0.1):
     return y - baseline_values
 
 
-def single_pulse(y, method='max'):
+@nb.jit(nopython=True, nogil=True, fastmath=True)
+def single_pulse(osc: np.ndarray, method: str = 'max') -> np.float64:
     """
     Get amplitude of the single pulse
 
@@ -99,64 +103,82 @@ def single_pulse(y, method='max'):
 
     """
     if method == 'sum':
-        return np.sum(y[y >= 0], dtype=float)
+        oscsum = 0
+        for i in nb.prange(len(osc)):
+            if osc[i] > 0:
+                oscsum += osc[i]
+        return oscsum
     elif method == 'max':
-        return max(y)
+        return np.max(osc)
 
 
-def random_pulse(y, method='max'):
+@np.vectorize
+def random_pulse(osc, method='max'):
+    # TODO: Make parameters external
     if method == 'sum':
-        return np.sum(y, dtype=float)
+        return np.sum(osc, dtype=float)
     elif method == 'max':
-        peaks, _ = find_peaks(y[y > 0], distance=50, width=10)
-        return sum(y[y > 0][peaks])
+        y = osc[osc > 0]
+        peaks = find_peaks(y, height=(0, None), distance=50,
+                           width=(10, None))[1]['peak_heights']
+        return np.sum(peaks)
 
 
-def periodic_pulse(data, frequency, time_window, method='max'):
-    discretedata = []
-    points_period = int(1 / frequency / data.horizInterval) + 1
-    points_window = int(time_window / data.horizInterval) + 1
-    y = data.y
-    init_point = np.argmax(y)
+@nb.jit(nopython=True, nogil=True, fastmath=True)
+def _periodic_pulse(oscarray: np.ndarray, dx: float, frequency: float,
+                    time_window: float, method: str = 'max') -> list:
+    points_period = int(1 / frequency / dx) + 1
+    points_window = int(time_window / dx) + 1
+
+    init_point = np.argmax(oscarray)
     pulses_points = np.append(
         np.arange(init_point, 0, -points_period)[::-1],
-        np.arange(init_point, len(y), points_period))
-    for p in pulses_points:
+        np.arange(init_point, len(oscarray), points_period))
+
+    pulses = np.zeros(pulses_points.shape)
+
+    for i in nb.prange(len(pulses_points)):
+        p = pulses_points[i]
         if p < points_window:
             low = 0
             top = points_window
         else:
             low = p - points_window // 2
             top = p + points_window // 2
-        discretedata.append(single_pulse(y[low:top], method=method))
-    return discretedata
+        pulses[i] = single_pulse(oscarray[low:top], method=method)
+
+    return pulses
+
+
+def periodic_pulse(data, frequency: float, time_window: float, method: str = 'max'):
+    return _periodic_pulse(data.y, data.horizInterval, frequency, time_window, method)
 
 
 def scope_unwindowed(data, time_discrete, method='max'):
-    points_discrete = int(time_discrete // data.horizInterval)
-    y = data.y
-    points_discrete += 1
-    discretedata = [random_pulse(y[i:i + points_discrete], method=method)
-                    for i in range(0, len(y), points_discrete)]
-    return discretedata
+    points_discrete = int(time_discrete // data.horizInterval) + 1
+    split_indexes = np.arange(0, len(data.y), points_discrete)
+    return random_pulse(np.split(data.y, split_indexes), method=method)
+
+
+def from_memo(path, oscdata, vendor):
+    _oscdata = parse_file(path, vendor)
+    _oscdata.y = oscdata
+    return _oscdata
 
 
 def memo_oscillogram(data, vendor, correct_bs=True):
-    if type(data) is str:
-        filedata = (data, parse_file(data, vendor))
-    if type(data) == tuple:
-        if type(data[1]) is not str:
-            return data
+    path, oscdata = data
 
-        filedata = (data[0], parse_file(data[0], vendor))
-        filedata[1].y = data[1]
-        return filedata
+    if oscdata is None:
+        oscdata = parse_file(path, vendor)
+        y = oscdata.y
+        y -= np.min(y)
+        oscdata.y = correct_baseline(y) if correct_bs else y
 
-    y = filedata[1].y
-    y -= np.min(y)
-    filedata[1].y = correct_baseline(y) if correct_bs else y
+    elif type(oscdata) == np.ndarray:
+        oscdata = from_memo(path, oscdata, vendor)
 
-    return filedata
+    return (path, oscdata)
 
 
 @dataclass
@@ -222,21 +244,34 @@ class PulsesHistMaker:
         if self.method not in self.methods:
             raise ValueError('method must be in %s, not %s' %
                              (self.methods, self.method))
+        self.rawdata = {}
+        self.discretedata = {}
 
-    def read(self, fsnum=-1, parallel_read=False):
-        if fsnum == -1:
-            fsnum = self.fsnum
-        self.rawdata = list_files(
-            self.datadir, self.vendor, self.fsoffset, fsnum)
+    def read(self, fsnum=0):
+        if fsnum != 0:
+            self.fsnum = fsnum
+
+        datapaths = list_files(
+            self.datadir, self.vendor, self.fsoffset, self.fsnum)
+
+        # Check if file was processed
+        files_processed = []
+
+        for path in self.rawdata:
+            if self.rawdata is not None:
+                files_processed.append(path)
+
+        for path in datapaths:
+            if path not in files_processed:
+                self.rawdata[path] = None
+
         if self.memo_file:
             with open(self.memo_file, 'rb') as f:
-                memodata = load(f, compression='lzma',
-                                set_default_extension=False)
-            for k, path in enumerate(self.rawdata):
-                if path in self.rawdata:
-                    self.rawdata[k] = (path, memodata[path])
+                self.rawdata.update(
+                    load(f, compression='lzma',
+                         set_default_extension=False))
 
-        self.filesnum = len(self.rawdata)
+        self.filesnum = len(self.rawdata) if not fsnum else fsnum
 
     def save_memo(self, filename):
         self.clear_rawdata()
@@ -247,18 +282,16 @@ class PulsesHistMaker:
     def save_hist(self, filename):
         np.savetxt(filename, np.vstack((self.bins[:-1], self.hist)).T)
 
-    def clear_rawdata(self):
-        for k in range(len(self.rawdata)):
-            p, d = self.rawdata[k]
-            self.rawdata[k] = (p, d.y)
+    def clear_data(self):
+        for k, d in self.rawdata.items():
+            self.rawdata[k] = d.y
+        self.discretedata = {}
 
     def single_pulse_hist(self, div_start=5.9, div_width=0.27):
-        self.discretedata = []
-        i = 1
-        for d in self.rawdata:
+        self.discretedata = {}
+        for path, d in self.rawdata.items():
             x, y = windowed(d, div_start, div_width)
-            self.discretedata.append(single_pulse(y, self.method))
-            i += 1
+            self.discretedata.update({path: single_pulse(y, self.method)})
         self.make_hist(self.histbins)
 
     def multi_pulse_histogram(self, frequency=2.5e6, time_window=7.5e-9):
@@ -270,27 +303,33 @@ class PulsesHistMaker:
         self.make_hist(self.histbins)
 
     def parse(self, func, args):
-        self.discretedata = []
+        self.discretedata = {}
 
         for i in range(0, self.filesnum, self.fchunksize):
             t = time.time()
             hb = min(i + self.fchunksize, self.filesnum)
-            self.rawdata[i:hb] = Parallel(
-                n_jobs=self.parallel_jobs)(
-                    delayed(memo_oscillogram)(
-                        df, self.vendor, self.correct_baseline)
-                for df in self.rawdata[i:hb])
-            pulsesdata = [func(df[1], *args) for df in self.rawdata[i:hb]]
-            self.discretedata += pulsesdata
+
+            chunk_data = parallelize(
+                memo_oscillogram, islice(self.rawdata.items(), i, hb),
+                self.parallel_jobs, self.vendor, self.correct_baseline)
+            self.rawdata.update(dict(chunk_data))
+
+            chunk_pulses = parallelize(
+                func, islice(self.rawdata.values(), i, hb),
+                self.parallel_jobs, *args)
+            self.discretedata.update(
+                dict(zip(islice(self.rawdata.keys(), i, hb), chunk_pulses)))
 
             print('Files ##%d-%d time %.2f s' %
                   (i, hb, time.time() - t), end='\t')
 
-            del pulsesdata
+            del chunk_data
+            del chunk_pulses
             gc.collect()
 
     def make_hist(self, histbins):
-        self.hist, self.bins = np.histogram(self.discretedata, bins=histbins)
+        pulses_data = np.concatenate(tuple(self.discretedata.values()))
+        self.hist, self.bins = np.histogram(pulses_data, bins=histbins)
 
     def get_hist(self, histbins):
         self.make_hist(histbins)

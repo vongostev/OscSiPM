@@ -6,7 +6,7 @@ from fpdet import normalize, lrange
 
 import numpy as np
 from scipy.signal import find_peaks
-from scipy.special import eval_hermitenorm
+from scipy.special import eval_hermitenorm as eval_hn
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
@@ -28,7 +28,7 @@ def loadhist(path, **kwargs):
 
 def gauss_hermite_poly(x, norm_factor, peak_pos, sigma, h3, h4):
     w = (x - peak_pos) / sigma
-    return norm_factor * np.exp(- w ** 2 / 2) * (1 + h3*eval_hermitenorm(3, w) + h4*eval_hermitenorm(4, w))
+    return norm_factor * np.exp(- w ** 2 / 2) * (1 + h3*eval_hn(3, w) + h4*eval_hn(4, w))
 
 
 def peak_area(norm_factor, peak_pos, sigma, h3, h4):
@@ -75,8 +75,6 @@ def construct_q_fit(hist, bins, peaks, downs):
                                [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 8, 0.01, 0.01])))
             popt = res.x
             Q.append(peak_area(*popt))
-            # if plot:
-            #     plt.plot(bins, gauss_hermite_poly(bins, *popt))
             break
     return Q
 
@@ -138,44 +136,45 @@ def hist2Q(hist, bins, discrete,
     JOSA B 27.5 (2010): 852-862.
 
     """
-    discrete = int(discrete * 0.9)
-    downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
+    if method != 'manual':
+        discrete = int(discrete * 0.9)
+        downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
 
-    if remove_pedestal:
-        it = 0
-        while sum(hist[downs]) > lim_downssum and it < maxiter:
-            middle_point = bins[len(bins) // 2]
-            dres = minimize(mindowns, args=(bins, hist, downs),
-                            x0=(1, middle_point, np.sqrt(middle_point), 0, 0))
-            hist -= gauss_hermite_poly(bins, *dres.x)
-            hist[hist < 0] = 0
-            downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
-            it += 1
+        if remove_pedestal:
+            if plot:
+                plt.plot(bins, hist)
+            it = 0
+            while sum(hist[downs]) > lim_downssum and it < maxiter:
+                middle_point = bins[len(bins) // 2]
+                dres = minimize(mindowns, args=(bins, hist, downs),
+                                x0=(1, middle_point, np.sqrt(middle_point), 0, 0))
+                hist -= gauss_hermite_poly(bins, *dres.x)
+                hist[hist < 0] = 0
+                downs, _ = find_peaks(
+                    -hist, distance=discrete, width=down_width)
+                it += 1
+
+        peaks, _ = find_peaks(np.concatenate(([0], hist)), threshold=threshold, distance=discrete,
+                              width=peak_width, plateau_size=(0, 10))
+        if peaks == []:
+            raise ValueError(
+                'Histogram peaks were not found with given settings')
 
         if plot:
-            plt.plot(bins, hist)
-
-    peaks, _ = find_peaks(np.concatenate(([0], hist)), threshold=threshold, distance=discrete,
-                          width=peak_width, plateau_size=(0, 10))
-    if peaks == []:
-        raise ValueError('Histogram peaks were not found with given settings')
-    peaks -= 1
-
-    if plot:
-        plt.scatter(bins[peaks], hist[peaks])
-        plt.scatter(bins[downs], hist[downs])
+            plt.scatter(bins[peaks], hist[peaks])
+            plt.scatter(bins[downs], hist[downs])
 
     if method == 'manual':
         Q = []
-        discrete = peaks[2] - peaks[1]
+        peaks = np.arange(0, len(bins), discrete)
         for p in peaks:
             low = int(max(0, p - discrete // 2))
             top = int(min(p + discrete // 2, len(hist) - 1))
             Q.append(sum(hist[low:top]))
 
             if plot:
-                plt.axvline(bins[low])
-                plt.axvline(bins[top])
+                plt.axvline(bins[low], linestyle=':', color='black')
+                plt.axvline(bins[top], linestyle=':', color='black')
 
         if top != len(hist) - 1:
             Q.append(sum(hist[top:]))
@@ -190,6 +189,8 @@ def hist2Q(hist, bins, discrete,
         plt.plot(bins, hist)
         plt.xlabel('Amplitude, V')
         plt.ylabel("Events' number")
+        if logplot:
+            plt.yscale('log')
         plt.show()
 
     return normalize(Q)
