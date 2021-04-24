@@ -131,7 +131,8 @@ def distort(Qcorr: np.array, p_crosstalk: float):
 
     @np.vectorize
     def point(k):
-        return sum(Qcorr[m] * p_crosstalk_m(m, k, p_crosstalk) for m in range(1, k + 1, 1))
+        return sum(Qcorr[m] * p_crosstalk_m(m, k, p_crosstalk)
+                   for m in range(1, k + 1, 1))
 
     Q[1:] = point(np.arange(1, N))
     return Q

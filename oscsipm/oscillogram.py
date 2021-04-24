@@ -239,10 +239,10 @@ class PulsesHistMaker:
         if not self.parallel:
             self.parallel_jobs = 1
         if self.vendor not in self.vendors:
-            raise ValueError('vendor must be in %s, not %s' %
+            raise ValueError('PulsesHistMaker.vendor must be in %s, not %s' %
                              (self.vendors, self.vendor))
         if self.method not in self.methods:
-            raise ValueError('method must be in %s, not %s' %
+            raise ValueError('PulsesHistMaker.method must be in %s, not %s' %
                              (self.methods, self.method))
         self.rawdata = {}
         self.discretedata = {}

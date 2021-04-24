@@ -2,6 +2,8 @@
 """
 @author: Pavel Gostev
 """
+from dataclasses import dataclass
+
 from fpdet import normalize, lrange
 
 import numpy as np
@@ -49,10 +51,9 @@ def construct_q_sum(hist, peaks, downs):
         for p in peaks:
             dl = downs[i]
             dt = downs[i+1]
-            if p < dl or p > dt:
-                continue
-            Q.append(sum(hist[dl:dt]))
-            break
+            if p >= dl and p <= dt:
+                Q.append(sum(hist[dl:dt]))
+                break
     return Q
 
 
@@ -60,29 +61,29 @@ def construct_q_fit(hist, bins, peaks, downs):
     Q = []
     for i in lrange(downs)[:-1]:
         for p in peaks:
-
             dl = downs[i]
             dt = downs[i+1]
-
-            if p < dl or p > dt:
-                continue
-            res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
-                           x0=(hist[p], bins[p], bins[1] -
-                               bins[0], 0.0, 0.0),
-                           bounds=list(zip(
-                               [hist[p] / 2, bins[dl], bins[1] -
-                                   bins[0], -0.01, -0.01],
-                               [hist[p], bins[dt], np.sqrt(bins[dt] - bins[dl]) / 8, 0.01, 0.01])))
-            popt = res.x
-            Q.append(peak_area(*popt))
-            break
+            if p >= dl and p <= dt:
+                res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
+                               x0=(hist[p], bins[p],
+                                   bins[1] - bins[0], 0.0, 0.0),
+                               bounds=[[hist[p] / 2, hist[p]],
+                                       [bins[dl], bins[dt]],
+                                       [bins[1] - bins[0],
+                                           np.sqrt(bins[dt] - bins[dl]) / 8],
+                                       [-0.01, 0.01],
+                                       [-0.01, 0.01]]
+                               )
+                popt = res.x
+                Q.append(peak_area(*popt))
+                break
     return Q
 
 
 def hist2Q(hist, bins, discrete,
-           threshold=1, peak_width=1, down_width=1,
-           method='sum', remove_pedestal=1, lim_downssum=1, maxiter=20,
-           plot=False, logplot=False):
+           method='sum', threshold=1, peak_width=1, down_width=1,
+           remove_pedestal=1, lim_downssum=1, maxiter=20,
+           plot=False, logplot=False, *args, **kwargs):
     """
     Build photocounting statistics from an experimental histogram
     by gaussian-hermite polynoms or simple sum
@@ -116,8 +117,9 @@ def hist2Q(hist, bins, discrete,
 
             'fit' is a gauss-hermite function fitteing like in [1]
 
-            'manual' is a simple summation of intervals with fixed length
-    remove_pedestal : boolean
+            'manual' is a simple summation of intervals with fixed length. 
+                remove_pedestal is ignored
+    remove_pedestal : bool
         Flag to remove pedestal noise from the histogram
     lim_downssum : float
         Limit for sum of downs of the histogram
@@ -139,6 +141,7 @@ def hist2Q(hist, bins, discrete,
     if method != 'manual':
         discrete = int(discrete * 0.9)
         downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
+        downs = np.append([0], downs)
 
         if remove_pedestal:
             if plot:
@@ -156,6 +159,8 @@ def hist2Q(hist, bins, discrete,
 
         peaks, _ = find_peaks(np.concatenate(([0], hist)), threshold=threshold, distance=discrete,
                               width=peak_width, plateau_size=(0, 10))
+        peaks -= 1
+
         if peaks == []:
             raise ValueError(
                 'Histogram peaks were not found with given settings')
@@ -167,6 +172,7 @@ def hist2Q(hist, bins, discrete,
     if method == 'manual':
         Q = []
         peaks = np.arange(0, len(bins), discrete)
+
         for p in peaks:
             low = int(max(0, p - discrete // 2))
             top = int(min(p + discrete // 2, len(hist) - 1))
@@ -179,11 +185,10 @@ def hist2Q(hist, bins, discrete,
         if top != len(hist) - 1:
             Q.append(sum(hist[top:]))
 
-    else:
-        if method == 'sum':
-            Q = construct_q_sum(hist, peaks, downs)
-        elif method == 'fit':
-            Q = construct_q_fit(hist, bins, peaks, downs)
+    elif method == 'sum':
+        Q = construct_q_sum(hist, peaks, downs)
+    elif method == 'fit':
+        Q = construct_q_fit(hist, bins, peaks, downs)
 
     if plot:
         plt.plot(bins, hist)
@@ -196,6 +201,7 @@ def hist2Q(hist, bins, discrete,
     return normalize(Q)
 
 
+@dataclass
 class QStatisticsMaker:
     """
     Class to make photocounting statistics from histogram
@@ -243,29 +249,34 @@ class QStatisticsMaker:
     JOSA B 27.5 (2010): 852-862.
 
     """
+    filename: str
+    amplitude_discrete: float
+    method: str = 'manual'
+    methods: tuple = ('sum', 'fit', 'manual')
 
-    def __init__(self, fname, photon_discrete,
-                 peak_width=1, down_width=1, method='fit', skiprows=0,
-                 plot=False, logplot=False,
-                 remove_pedestal=True):
-        self.photon_discrete = photon_discrete
-        self.fname = fname
+    skiprows: int = 0
 
-        self._extract_data(skiprows)
-        self.Q = hist2Q(self.hist, self.bins, discrete=self.points_discrete,
-                        peak_width=peak_width, down_width=down_width,
-                        plot=plot, logplot=logplot,
-                        method=method,
-                        remove_pedestal=remove_pedestal)
+    peak_width: float = 1.
+    down_width: float = 1.
 
-    # Reading information from the file
-    def _extract_data(self, skiprows):
-        self.bins, self.hist = loadhist(self.fname, skiprows=skiprows)
-        if self.bins[1] - self.bins[0] < 0:
-            self.bins = self.bins[::-1]
-            self.hist = self.hist[::-1]
-        self.points_discrete = int(self.photon_discrete /
-                                   (self.bins[1] - self.bins[0]))
+    plot: bool = False
+    logplot: bool = False
+    remove_pedestal: bool = False
+
+    def __post_init__(self):
+
+        if self.method not in self.methods:
+            raise ValueError(
+                f"QStatisticsMaker.method must be in {self.methods}, not {self.method}")
+
+        self.bins, self.hist = loadhist(self.filename, skiprows=self.skiprows)
+        if self.method == self.methods[2]:
+            self.hist = self.hist[self.bins >= 0]
+            self.bins = self.bins[self.bins >= 0]
+
+        self.discrete = int(self.amplitude_discrete /
+                            (self.bins[1] - self.bins[0]))
+        self.Q = hist2Q(**self.__dict__)
 
     def getq(self):
         """
@@ -274,8 +285,7 @@ class QStatisticsMaker:
         Returns
         -------
         self.Q : ndarray
-            self.Q[self.Q > 0].
 
         """
 
-        return normalize(self.Q[self.Q > 0])
+        return self.Q
