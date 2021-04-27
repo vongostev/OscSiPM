@@ -151,13 +151,15 @@ def _periodic_pulse(oscarray: np.ndarray, dx: float, frequency: float,
 
 
 def periodic_pulse(data, frequency: float, time_window: float, method: str = 'max'):
-    return _periodic_pulse(data.y, data.horizInterval, frequency, time_window, method)
+    return _periodic_pulse(
+        data.y, data.horizInterval, frequency, time_window, method)
 
 
 def scope_unwindowed(data, time_discrete, method='max'):
     points_discrete = int(time_discrete // data.horizInterval) + 1
     split_indexes = np.arange(0, len(data.y), points_discrete)
-    return random_pulse(np.split(data.y, split_indexes), method=method)
+    chunks = np.array(np.split(data.y.copy(), split_indexes), dtype='O')
+    return random_pulse(chunks, method=method)
 
 
 def from_memo(path, oscdata, vendor):
