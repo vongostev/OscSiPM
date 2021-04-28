@@ -237,6 +237,8 @@ class PulsesHistMaker:
     vendor: str = 'lecroy'
     vendors: tuple = ('lecroy', 'tek')
 
+    disp: bool = False
+
     def __post_init__(self):
         if not self.parallel:
             self.parallel_jobs = 1
@@ -322,8 +324,9 @@ class PulsesHistMaker:
             self.discretedata.update(
                 dict(zip(islice(self.rawdata.keys(), i, hb), chunk_pulses)))
 
-            print('Files ##%d-%d time %.2f s' %
-                  (i, hb, time.time() - t), end='\t')
+            if self.disp:
+                print(
+                    f'Files ##{i + 1}-{hb + 1} T={time.time() - t:.2f} s', end='\t')
 
             del chunk_data
             del chunk_pulses

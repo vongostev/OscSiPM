@@ -274,6 +274,10 @@ class QStatisticsMaker:
             self.hist = self.hist[self.bins >= 0]
             self.bins = self.bins[self.bins >= 0]
 
+        if self.bins[1] < self.bins[0]:
+            self.bins = self.bins[::-1]
+            self.hist = self.hist[::-1]
+
         self.discrete = int(self.amplitude_discrete /
                             (self.bins[1] - self.bins[0]))
         self.Q = hist2Q(**self.__dict__)
