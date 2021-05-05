@@ -18,7 +18,7 @@ log.setLevel(logging.INFO)
 info = log.info
 
 
-def d_crosstalk_4n(p_crosstalk: float):
+def d_crosstalk_4n(p_crosstalk: float) -> np.ndarray:
     """
     Probabilities of k ≤ 5 triggered pixels for the 4-neighbours model
 
@@ -57,7 +57,7 @@ def d_crosstalk_4n(p_crosstalk: float):
 
 
 @lru_cache(maxsize=None)
-def p_crosstalk_m(m: int, k: int, p_crosstalk: float):
+def p_crosstalk_m(m: int, k: int, p_crosstalk: float) -> float:
     """
     The probability of total number k of triggered pixels provided m primaries
 
@@ -90,14 +90,12 @@ def p_crosstalk_m(m: int, k: int, p_crosstalk: float):
 
     ctnoise = d_crosstalk_4n(p_crosstalk)
     if m == 1:
-        if k > 5:
-            return 0
-        return ctnoise[k]
+        return ctnoise[k] if k < 5 else 0
     return sum(p_crosstalk_m(m - 1, k - i, p_crosstalk) * ctnoise[i]
                for i in range(1, k - m + 2, 1) if i <= 5)
 
 
-def distort(Qcorr: np.array, p_crosstalk: float):
+def distort(Qcorr: np.ndarray, p_crosstalk: float) -> np.ndarray:
     """
     Include crosstalk noise into photocounting statistics.
     We use model with 4 neighbors with saturation.
@@ -131,14 +129,15 @@ def distort(Qcorr: np.array, p_crosstalk: float):
 
     @np.vectorize
     def point(k):
-        return sum(Qcorr[m] * p_crosstalk_m(m, k, p_crosstalk)
-                   for m in range(1, k + 1, 1))
+        m = np.arange(1, k + 1)
+        return np.sum(Qcorr[m] * np.vectorize(
+            p_crosstalk_m, otypes=[float])(m, k, p_crosstalk))
 
     Q[1:] = point(np.arange(1, N))
     return Q
 
 
-def compensate(Q: np.array, p_crosstalk: float):
+def compensate(Q: np.ndarray, p_crosstalk: float) -> np.ndarray:
     """
     Remove crosstalk noise from photocounting statistics.
     We use model with 4 neighbors with saturation.
@@ -172,10 +171,11 @@ def compensate(Q: np.array, p_crosstalk: float):
     Qcorr[0] = Q[0]
     Qcorr[1] = Q[1] / (1 - eps)
     for m in range(2, N):
+        k = np.arange(1, m)
         c1 = (1 - eps) ** -m
-        c2 = Q[m] - sum(Qcorr[k] * p_crosstalk_m(k, m, p_crosstalk)
-                        for k in range(1, m))
-        Qcorr[m] = c1 * c2
+        c2 = np.sum(Qcorr[k] * np.vectorize(
+            p_crosstalk_m, otypes=[float])(k, m, p_crosstalk))
+        Qcorr[m] = c1 * (Q[m] - c2)
 
     return normalize(Qcorr)
 
@@ -216,7 +216,7 @@ def optctp(_pct_param, Q, PDE, N, mtype, n_cells):
     return abs(g2(Qest) - g2(Qtheory))
 
 
-def find_pcrosstalk(Q: np.array, PDE: float, N: int,
+def find_pcrosstalk(Q: np.ndarray, PDE: float, N: int,
                     mtype: str = 'binomial', n_cells: int = 0,
                     Ns: int = 100, min_pct: float = 0, max_pct: float = 0.1):
     """
@@ -274,7 +274,7 @@ def find_pcrosstalk(Q: np.array, PDE: float, N: int,
                                      grid=res[2], Jout=res[3])
 
 
-def Q2total_pcrosstalk(Q: np.array):
+def Q2total_pcrosstalk(Q: np.ndarray) -> float:
     """
     Calculate model independent total crosstalk probability.
     It's may be vary from the result of optimize_pcrosstalk
@@ -304,7 +304,7 @@ def Q2total_pcrosstalk(Q: np.array):
     return 1 - Q[1] / mu / np.exp(- mu)
 
 
-def total_pcrosstalk(p_crosstalk: float):
+def total_pcrosstalk(p_crosstalk: float) -> float:
     """
     Calculate total crosstalk probability from
     the probability of single crosstalk event.
@@ -334,7 +334,7 @@ def total_pcrosstalk(p_crosstalk: float):
     return 1 - (1 - p_crosstalk)**4
 
 
-def single_pcrosstalk(total_pcrosstalk: float):
+def single_pcrosstalk(total_pcrosstalk: float) -> float:
     """
     Inverse formula to ``total_pcrosstalk''
 
@@ -352,7 +352,7 @@ def single_pcrosstalk(total_pcrosstalk: float):
     return 1 - (1 - total_pcrosstalk) ** 0.25
 
 
-def ENF(p_crosstalk: float):
+def ENF(p_crosstalk: float) -> float:
     """
     Calculate excess noise factor (ENF) of the detector
 

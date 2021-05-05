@@ -13,39 +13,47 @@ from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
 
-def loadhist(path, **kwargs):
+def loadhist(path: str, skiprows: int = 0):
     for dl in [',', ' ', '\t']:
         try:
-            bins, hist = np.loadtxt(path, delimiter=dl, unpack=True, **kwargs)
-        except (ValueError, TypeError, FileNotFoundError, IOError) as E:
-            np.warnings.warn_explicit(
-                'Histogram parsing with delimiter' + r' "%s": %s' % (dl, E),
-                IOError, __file__, 17)
+            bins, hist = np.loadtxt(
+                path, delimiter=dl, unpack=True, skiprows=skiprows)
+        except (ValueError, TypeError, IOError):
             continue
+        except FileNotFoundError as E:
+            raise FileNotFoundError(E)
         else:
+            print(f'Histogram file {path} parsed with delimiter {dl}')
             return bins, hist
 
     raise ValueError("Can't parse the histogram from the file %s" % path)
 
 
-def gauss_hermite_poly(x, norm_factor, peak_pos, sigma, h3, h4):
+def gauss_hermite_poly(x: float, norm_factor: float, peak_pos: float,
+                       sigma: float, h3: float, h4: float) -> float:
     w = (x - peak_pos) / sigma
-    return norm_factor * np.exp(- w ** 2 / 2) * (1 + h3*eval_hn(3, w) + h4*eval_hn(4, w))
+    gaussian = norm_factor * np.exp(- w ** 2 / 2)
+    return gaussian * (1 + h3*eval_hn(3, w) + h4*eval_hn(4, w))
 
 
-def peak_area(norm_factor, peak_pos, sigma, h3, h4):
+def peak_area(norm_factor: float, peak_pos: float, sigma: float,
+              h3: float, h4: float) -> float:
     return norm_factor * sigma * (np.sqrt(2*np.pi) + h4)
 
 
-def minpoly(popt, bins, hist):
+def minpoly(popt: np.ndarray,
+            hist: np.ndarray, bins: np.ndarray) -> float:
     return np.linalg.norm(gauss_hermite_poly(bins, *popt) - hist, 1)
 
 
-def mindowns(popt, bins, hist, downs):
+def mindowns(popt: np.ndarray,
+             hist: np.ndarray, bins: np.ndarray, downs: np.ndarray) -> float:
     return np.linalg.norm((hist - gauss_hermite_poly(bins, *popt))[downs])
 
 
-def construct_q_sum(hist, peaks, downs):
+def construct_q_sum(hist: np.ndarray,
+                    peaks: np.ndarray,
+                    downs: np.ndarray) -> np.ndarray:
     Q = []
     for i in lrange(downs)[:-1]:
         for p in peaks:
@@ -57,44 +65,50 @@ def construct_q_sum(hist, peaks, downs):
     return Q
 
 
-def construct_q_fit(hist, bins, peaks, downs):
+def construct_q_fit(hist: np.ndarray, bins: np.ndarray,
+                    peaks: np.ndarray, downs: np.ndarray) -> np.ndarray:
     Q = []
     for i in lrange(downs)[:-1]:
         for p in peaks:
             dl = downs[i]
             dt = downs[i+1]
             if p >= dl and p <= dt:
-                res = minimize(minpoly, args=(bins[dl:dt], hist[dl:dt]),
-                               x0=(hist[p], bins[p],
-                                   bins[1] - bins[0], 0.0, 0.0),
-                               bounds=[[hist[p] / 2, hist[p]],
-                                       [bins[dl], bins[dt]],
-                                       [bins[1] - bins[0],
-                                           np.sqrt(bins[dt] - bins[dl]) / 8],
-                                       [-0.01, 0.01],
-                                       [-0.01, 0.01]]
-                               )
+                fit_bounds = [[hist[p] / 2, hist[p]],
+                              [bins[dl], bins[dt]],
+                              [bins[1] - bins[0],
+                                  np.sqrt(bins[dt] - bins[dl]) / 8],
+                              [-0.01, 0.01],
+                              [-0.01, 0.01]]
+                x0 = (hist[p], bins[p], bins[1] - bins[0], 0.0, 0.0)
+                res = minimize(minpoly, args=(hist[dl:dt], bins[dl:dt]),
+                               x0=x0, bounds=fit_bounds)
                 popt = res.x
                 Q.append(peak_area(*popt))
                 break
     return Q
 
 
-def hist2Q(hist, bins, discrete,
-           method='sum', threshold=1, peak_width=1, down_width=1,
-           remove_pedestal=1, lim_downssum=1, maxiter=20,
-           plot=False, logplot=False, *args, **kwargs):
+def hist2Q(hist: np.ndarray, bins: np.ndarray, discrete: int,
+           method: str = 'sum', threshold: float = 1,
+           peak_width: float = 1, down_width: float = 1,
+           manual_zero_offset: int = 0,
+           plot: bool = False, logplot: bool = False, *args, **kwargs) -> np.ndarray:
     """
     Build photocounting statistics from an experimental histogram
     by gaussian-hermite polynoms or simple sum
 
     Parameters
     ----------
-    hist : iterable
-        The experimental histogram.
+    hist : ndarray
+        Experimental histogram values.
+    bins : ndarray
+        Experimental histogram bins.
     discrete : int
         The amplitude of single photocount pulse in points.
-    threshold : int, optional
+    manual_zero_offset: int, optional
+        Offset for calculate zero-photon probability in presence of non-zero noise pulses (in points).
+        The default is 0.
+    threshold : float, optional
         Minimal number of events to find histogram peak.
         The default is 1.
     peak_width : float, optional
@@ -119,12 +133,6 @@ def hist2Q(hist, bins, discrete,
 
             'manual' is a simple summation of intervals with fixed length. 
                 remove_pedestal is ignored
-    remove_pedestal : bool
-        Flag to remove pedestal noise from the histogram
-    lim_downssum : float
-        Limit for sum of downs of the histogram
-    maxiter : int
-        Maximum iterations count for pedestal removing
 
     Returns
     -------
@@ -143,20 +151,6 @@ def hist2Q(hist, bins, discrete,
         downs, _ = find_peaks(-hist, distance=discrete, width=down_width)
         downs = np.append([0], downs)
 
-        if remove_pedestal:
-            if plot:
-                plt.plot(bins, hist)
-            it = 0
-            while sum(hist[downs]) > lim_downssum and it < maxiter:
-                middle_point = bins[len(bins) // 2]
-                dres = minimize(mindowns, args=(bins, hist, downs),
-                                x0=(1, middle_point, np.sqrt(middle_point), 0, 0))
-                hist -= gauss_hermite_poly(bins, *dres.x)
-                hist[hist < 0] = 0
-                downs, _ = find_peaks(
-                    -hist, distance=discrete, width=down_width)
-                it += 1
-
         peaks, _ = find_peaks(np.concatenate(([0], hist)), threshold=threshold, distance=discrete,
                               width=peak_width, plateau_size=(0, 10))
         peaks -= 1
@@ -171,12 +165,15 @@ def hist2Q(hist, bins, discrete,
 
     if method == 'manual':
         Q = []
-        peaks = np.arange(0, len(bins), discrete)
+        peaks = np.arange(manual_zero_offset, len(bins), discrete)
 
         for p in peaks:
-            low = int(max(0, p - discrete // 2))
+            if p == manual_zero_offset:
+                low = 0
+            else:
+                low = int(max(0, p - discrete // 2))
             top = int(min(p + discrete // 2, len(hist) - 1))
-            Q.append(sum(hist[low:top]))
+            Q.append(np.sum(hist[low:top]))
 
             if plot:
                 plt.axvline(bins[low], linestyle=':', color='black')
@@ -204,14 +201,22 @@ def hist2Q(hist, bins, discrete,
 @dataclass
 class QStatisticsMaker:
     """
-    Class to make photocounting statistics from histogram
+    Class to make photocounting frequency distribution (statistics) from the histogram file.
+    A format of the file must be texted with lines organized as follows:
+        bin_value<delimiter from {',', ' ', '\t'}>hist_value\n
 
-    __init__ arguments
+    One can use three different methods to construct frequency distribution: ('sum', 'fit', 'manual').
+    The best tested one is 'manual'. Two others are experimental and can be unstable.
+
+    Parameters
     ----------
-    fname : string
+    filename : string
         File name contains the histogram.
-    photon_discrete : float
-        The amplitude of the single-photocount pulse.
+    amplitude_discrete : float
+        The amplitude of single-photocount pulses.
+    amplitude_zero_offset: float, optional
+        Offset for calculate zero-photon probability in presence of non-zero noise pulses.
+        The default is 0.
     peak_width : int, optional
         The width of peaks.
         It must be 1 if the histogram is made by 'count' method.
@@ -227,20 +232,19 @@ class QStatisticsMaker:
     logplot : bool
         Enable log yscale for histogram plotting.
         The default is False.        
-    method : {'sum', 'fit', 'manual'}
+    method : ('sum', 'fit', 'manual')
         Method of the photocounting statistics construction.
-            'sum' is a simple summation between minimums of the histogram
-
-            'fit' is a gauss-hermite function fitteing like in [1]
-
-            'manual' is a simple summation of intervals with fixed length
+            - 'sum' is a simple summation between minimums of the histogram
+            - 'fit' is a gauss-hermite function fitteing like in [1]
+            - 'manual' is a simple summation of intervals with fixed length
     skiprows : int, optional
         Number of preamble rows in the file. The default is 0.
     plot : bool, optional
         Flag to plot hist and results of find_peaks.
         The default is False.
-    remove_pedestal : boolean
-        Flag to remove pedestal from the histogram
+    logplot : bool
+        Enable log yscale for histogram plotting.
+        The default is False.
 
     References
     ----------
@@ -251,6 +255,7 @@ class QStatisticsMaker:
     """
     filename: str
     amplitude_discrete: float
+    amplitude_zero_offset: float = 0
     method: str = 'manual'
     methods: tuple = ('sum', 'fit', 'manual')
 
@@ -261,25 +266,25 @@ class QStatisticsMaker:
 
     plot: bool = False
     logplot: bool = False
-    remove_pedestal: bool = False
 
     def __post_init__(self):
 
-        if self.method not in self.methods:
-            raise ValueError(
-                f"QStatisticsMaker.method must be in {self.methods}, not {self.method}")
+        assert (self.method in self.methods,
+                f"{self.__name__}.method must be in {self.methods}, not {self.method}")
 
         self.bins, self.hist = loadhist(self.filename, skiprows=self.skiprows)
+        # Cut bins and hist if manual method is used
         if self.method == self.methods[2]:
             self.hist = self.hist[self.bins >= 0]
             self.bins = self.bins[self.bins >= 0]
-
+        # Inverse data if bins are ordered descending
         if self.bins[1] < self.bins[0]:
             self.bins = self.bins[::-1]
             self.hist = self.hist[::-1]
 
-        self.discrete = int(self.amplitude_discrete /
-                            (self.bins[1] - self.bins[0]))
+        dx = self.bins[1] - self.bins[0]
+        self.manual_zero_offset = int(self.amplitude_zero_offset / dx)
+        self.discrete = int(self.amplitude_discrete / dx)
         self.Q = hist2Q(**self.__dict__)
 
     def getq(self):
