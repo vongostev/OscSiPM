@@ -269,7 +269,8 @@ class QStatisticsMaker:
 
     def __post_init__(self):
 
-        assert (self.method in self.methods,
+        if self.method not in self.methods:
+            raise ValueError(
                 f"{self.__name__}.method must be in {self.methods}, not {self.method}")
 
         self.bins, self.hist = loadhist(self.filename, skiprows=self.skiprows)
