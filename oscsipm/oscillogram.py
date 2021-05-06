@@ -175,9 +175,9 @@ def periodic_pulse(data: object, frequency: float, time_window: float,
         data.y, data.horizInterval, frequency, time_window, method)
 
 
-def scope_unwindowed(data: object, time_discrete: float, peak_height_min: float,
+def scope_unwindowed(data: object, time_window: float, peak_height_min: float,
                      peak_width: float, peak_distance: float, method='max') -> np.ndarray:
-    points_discrete = int(time_discrete // data.horizInterval) + 1
+    points_discrete = int(time_window // data.horizInterval) + 1
     split_indexes = np.arange(0, len(data.y), points_discrete)
     chunks = np.array(np.split(data.y.copy(), split_indexes), dtype='O')
     return random_pulse(chunks, data.horizInterval, peak_height_min,
@@ -191,12 +191,16 @@ def from_memo(path: str, oscdata: np.ndarray, vendor: str) -> object:
 
 
 def memo_oscillogram(data: tuple, vendor: str,
-                     lf_filtering: float, correct_bs: bool = True) -> tuple:
+                     lf_filtering: float, time_to_cut: float,
+                     correct_bs: bool = True) -> tuple:
     path, oscdata = data
 
     if oscdata is None:
         oscdata = parse_file(path, vendor)
-        y = oscdata.y
+        if time_to_cut != 0:
+            y = oscdata.y[:int(time_to_cut // oscdata.horizInterval)]
+        else:
+            y = oscdata.y
         y -= np.min(y)
         y = correct_baseline(y) if correct_bs else y
         y = sqv_bandpass_filter(y, 0.5 / oscdata.horizInterval,
@@ -364,7 +368,7 @@ class PulsesHistMaker:
         self.parse(periodic_pulse, frequency, time_window, self.method)
         self.make_hist(self.histbins)
 
-    def unwindowed_histogram(self, time_discrete: float = 100e-9,
+    def unwindowed_histogram(self, time_window: float = 100e-9,
                              peak_height_min: float = 0.01,
                              peak_width: float = 2e-9,
                              peak_distance: float = 19e-9):
@@ -374,7 +378,7 @@ class PulsesHistMaker:
 
         Parameters
         ----------
-        time_discrete : float, optional
+        time_window : float, optional
             Time window size to detect pulses (in seconds). 
             The default is 100e-9.
         peak_height_min : float, optional
@@ -392,7 +396,7 @@ class PulsesHistMaker:
         None.
 
         """
-        self.parse(scope_unwindowed, time_discrete, peak_height_min,
+        self.parse(scope_unwindowed, time_window, peak_height_min,
                    peak_width, peak_distance, self.method)
         self.make_hist(self.histbins)
 
@@ -407,7 +411,8 @@ class PulsesHistMaker:
 
             chunk_data = parallelize(
                 memo_oscillogram, sl(self.rawdata.items()),
-                self.parallel_jobs, self.vendor, self.lf_filtering, self.correct_baseline)
+                self.parallel_jobs, self.vendor, self.lf_filtering,
+                args[0] * (self.histpoints + 1), self.correct_baseline)
             self.rawdata.update(dict(chunk_data))
 
             chunk_pulses = parallelize(
@@ -420,8 +425,8 @@ class PulsesHistMaker:
                 break
 
             if self.disp:
-                print(
-                    f'Files ##{i + 1}-{hb + 1} T={time.time() - t:.2f} s', end='\t')
+                print(f'Files ##{i + 1}-{hb + 1} T={time.time() - t:.2f} s',
+                      end='\t')
 
             del chunk_data
             del chunk_pulses

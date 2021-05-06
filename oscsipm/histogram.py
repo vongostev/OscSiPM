@@ -132,7 +132,6 @@ def hist2Q(hist: np.ndarray, bins: np.ndarray, discrete: int,
             'fit' is a gauss-hermite function fitteing like in [1]
 
             'manual' is a simple summation of intervals with fixed length. 
-                remove_pedestal is ignored
 
     Returns
     -------
