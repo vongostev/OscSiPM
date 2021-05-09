@@ -176,7 +176,7 @@ def periodic_pulse(data: object, frequency: float, time_window: float,
 
 
 def scope_unwindowed(data: object, time_window: float, peak_height_min: float,
-                     peak_width: float, peak_distance: float, method='max') -> np.ndarray:
+                     peak_width: float, peak_distance: float, method: str = 'max') -> np.ndarray:
     points_discrete = int(time_window // data.horizInterval) + 1
     split_indexes = np.arange(0, len(data.y), points_discrete)
     chunks = np.array(np.split(data.y.copy(), split_indexes), dtype='O')
@@ -191,16 +191,12 @@ def from_memo(path: str, oscdata: np.ndarray, vendor: str) -> object:
 
 
 def memo_oscillogram(data: tuple, vendor: str,
-                     lf_filtering: float, time_to_cut: float,
-                     correct_bs: bool = True) -> tuple:
+                     lf_filtering: float, correct_bs: bool = True) -> tuple:
     path, oscdata = data
 
     if oscdata is None:
         oscdata = parse_file(path, vendor)
-        if time_to_cut != 0:
-            y = oscdata.y[:int(time_to_cut // oscdata.horizInterval)]
-        else:
-            y = oscdata.y
+        y = oscdata.y
         y -= np.min(y)
         y = correct_baseline(y) if correct_bs else y
         y = sqv_bandpass_filter(y, 0.5 / oscdata.horizInterval,
@@ -411,8 +407,8 @@ class PulsesHistMaker:
 
             chunk_data = parallelize(
                 memo_oscillogram, sl(self.rawdata.items()),
-                self.parallel_jobs, self.vendor, self.lf_filtering,
-                args[0] * (self.histpoints + 1), self.correct_baseline)
+                self.parallel_jobs, self.vendor,
+                self.lf_filtering, self.correct_baseline)
             self.rawdata.update(dict(chunk_data))
 
             chunk_pulses = parallelize(
@@ -420,13 +416,13 @@ class PulsesHistMaker:
             self.discretedata.update(
                 dict(zip(sl(self.rawdata.keys()), chunk_pulses)))
 
-            datalen += sum([len(x) for x in chunk_pulses])
-            if self.histpoints > 0 and datalen >= self.histpoints:
-                break
-
             if self.disp:
                 print(f'Files ##{i + 1}-{hb + 1} T={time.time() - t:.2f} s',
                       end='\t')
+
+            datalen += sum([len(x) for x in chunk_pulses])
+            if self.histpoints > 0 and datalen >= self.histpoints:
+                break
 
             del chunk_data
             del chunk_pulses
