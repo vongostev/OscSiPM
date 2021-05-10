@@ -4,4 +4,4 @@ from .crosstalk import (find_pcrosstalk, compensate, distort,
                         Q2total_pcrosstalk, total_pcrosstalk, single_pcrosstalk,
                         ENF)
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"

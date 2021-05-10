@@ -387,10 +387,6 @@ class PulsesHistMaker:
             Minimal distance between consecutive pulses (in seconds). 
             The default is 19e-9.
 
-        Returns
-        -------
-        None.
-
         """
         self.parse(scope_unwindowed, time_window, peak_height_min,
                    peak_width, peak_distance, self.method)
@@ -398,7 +394,6 @@ class PulsesHistMaker:
 
     def parse(self, func, *args):
         self.discretedata = {}
-        datalen = 0
 
         for i in range(0, self.filesnum, self.fchunksize):
             t = time.time()
@@ -419,10 +414,6 @@ class PulsesHistMaker:
             if self.disp:
                 print(f'Files ##{i + 1}-{hb + 1} T={time.time() - t:.2f} s',
                       end='\t')
-
-            datalen += sum([len(x) for x in chunk_pulses])
-            if self.histpoints > 0 and datalen >= self.histpoints:
-                break
 
             del chunk_data
             del chunk_pulses
