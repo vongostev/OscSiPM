@@ -274,13 +274,16 @@ class QStatisticsMaker:
 
         self.bins, self.hist = loadhist(self.filename, skiprows=self.skiprows)
         # Cut bins and hist if manual method is used
-        if self.method == self.methods[2]:
-            self.hist = self.hist[self.bins >= 0]
-            self.bins = self.bins[self.bins >= 0]
         # Inverse data if bins are ordered descending
         if self.bins[1] < self.bins[0]:
             self.bins = self.bins[::-1]
             self.hist = self.hist[::-1]
+
+        if self.method == self.methods[2]:
+            neg_counts = np.sum(self.hist[self.bins < 0])
+            self.hist = self.hist[self.bins >= 0]
+            self.bins = self.bins[self.bins >= 0]
+            self.hist[0] += neg_counts
 
         dx = self.bins[1] - self.bins[0]
         self.manual_zero_offset = int(self.amplitude_zero_offset / dx)
