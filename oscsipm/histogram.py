@@ -288,9 +288,10 @@ class QStatisticsMaker:
         dx = self.bins[1] - self.bins[0]
         self.manual_zero_offset = int(self.amplitude_zero_offset / dx)
         self.discrete = int(self.amplitude_discrete / dx)
-        self.Q = hist2Q(**self.__dict__)
+        self._q = hist2Q(**self.__dict__)
 
-    def getq(self):
+    @property
+    def Q(self):
         """
         Returns the photocounting statistics was made
 
@@ -300,4 +301,4 @@ class QStatisticsMaker:
 
         """
 
-        return self.Q
+        return self._q
