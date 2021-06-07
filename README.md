@@ -1,4 +1,6 @@
-![OscSiPM](https://github.com/vongostev/OscSiPM/workflows/OscSiPM/badge.svg?branch=main) [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/vongostev/OscSiPM.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/vongostev/OscSiPM/context:python)
+[![python 3.6-3.8](https://github.com/vongostev/OscSiPM/actions/workflows/python-package.yml/badge.svg)](https://github.com/vongostev/OscSiPM/actions/workflows/python-package.yml)
+[![pypi](https://github.com/vongostev/OscSiPM/actions/workflows/python-publish.yml/badge.svg)](https://github.com/vongostev/OscSiPM/actions/workflows/python-publish.yml)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/vongostev/OscSiPM.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/vongostev/OscSiPM/context:python)
 
 # OscSiPM
 Instruments to make a photocounting statistics from histograms and raw oscillograms (made by LeCroy oscilloscope or old Tektronix oscilloscope) of SiPM signal. One can correct the baseline of the oscillogram and compensate a crosstalk noise in the photocounting statistics.
@@ -28,8 +30,8 @@ parser.save_hist(histfile)
 Make a photocounting statistics
 ```python
 histfile = "C:\\histograms\\test.txt"
-qmaker = QStatisticsMaker(histfile, amplitude_discrete=0.021, method='fit')
-Q = qmaker.getq()
+qmaker = QStatisticsMaker(histfile, amplitude_discrete=0.021, method='manual')
+Q = qmaker.Q
 ```
 Determine a crosstalk probability (if an optical signal is coherent) and compensate it
 ```python
