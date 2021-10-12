@@ -18,15 +18,15 @@ def loadhist(path: str, skiprows: int = 0):
         try:
             bins, hist = np.loadtxt(
                 path, delimiter=dl, unpack=True, skiprows=skiprows)
-        except (ValueError, TypeError, IOError):
-            continue
         except FileNotFoundError as E:
             raise FileNotFoundError(E)
+        except (ValueError, TypeError, IOError):
+            continue
         else:
             print(f'Histogram file {path} parsed with delimiter {dl}')
             return bins, hist
 
-    raise ValueError("Can't parse the histogram from the file %s" % path)
+    raise ValueError(f"Can't parse the histogram from the file {path}")
 
 
 def gauss_hermite_poly(x: float, norm_factor: float, peak_pos: float,
